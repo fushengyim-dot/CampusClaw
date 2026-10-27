@@ -1,0 +1,29 @@
+# 本机私密配置
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# 运行数据、缓存及自动生成结果
+runtime/
+uploads/
+data/
+*.db
+*.sqlite
+*.sqlite3
+*.log
+node_modules/
+dist/
+build/
+bin/
+.venv/
+__pycache__/
+*.pyc
+coverage/
+apitest/reports/
+tests/reports/
+
+# 操作系统临时文件
+.DS_Store
+Thumbs.db

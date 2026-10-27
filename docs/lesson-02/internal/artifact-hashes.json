@@ -1,0 +1,38 @@
+[
+  {
+    "path": "README.md",
+    "sha256": "281B8ABA58D144E27CDE2EDCEFEB9231885AE79560C5C90020ACDC57A74D3279"
+  },
+  {
+    "path": "AGENTS.md",
+    "sha256": "87DE5B0DD752ED681BFC87832344F716074C82F69E8744EE1E8DB166825F8015"
+  },
+  {
+    "path": ".gitignore",
+    "sha256": "B3CACF6A7669DD501E0A0794BC65E873B2516E7ED9BCFDC7C24F9DE04876C214"
+  },
+  {
+    "path": "openspec/config.yaml",
+    "sha256": "E46F6598F3F378F04A9C068E8CECB1440A9B9A7196B8B4442428344FFBEB9471"
+  },
+  {
+    "path": "openspec/changes/add-auth-rbac-class-knowledge/proposal.md",
+    "sha256": "D8A3153C4E0DC0A83EFCDE0A446A764EF05D677DE9423004172208C78903DFA9"
+  },
+  {
+    "path": "openspec/changes/add-auth-rbac-class-knowledge/design.md",
+    "sha256": "A40607617F90A40AA2796B9BB80F7425C13AE15FCF9B6C372B061178E8B9B671"
+  },
+  {
+    "path": "openspec/changes/add-auth-rbac-class-knowledge/specs/auth-upload/spec.md",
+    "sha256": "7C99660EC2AED849C2E9EDFD621DCA389271C39FBF01F69A03E2E90549DBC35F"
+  },
+  {
+    "path": "openspec/changes/add-auth-rbac-class-knowledge/tasks.md",
+    "sha256": "C493E24ADCF9619F60088034117F9F9692377394494F4B399F262A4413A2F556"
+  },
+  {
+    "path": "docs/lesson-02/internal/REVIEW.md",
+    "sha256": "AC9AA76FAB05A3862B8DEA9197293DAA7EAB24C1308949A3053997F4B0CD69F1"
+  }
+]
