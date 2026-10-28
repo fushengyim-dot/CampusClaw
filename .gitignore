@@ -46,3 +46,7 @@ Thumbs.db
 /TASK_BOARD.md
 /docs/report/*.pdf
 !/docs/report/CampusClaw_Report_v3.pdf
+
+# 本地协作与交接规则
+/HANDOFF.md
+/AGENTS.md

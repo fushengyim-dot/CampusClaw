@@ -21,7 +21,7 @@
 
 当前启动脚本面向 Windows、PowerShell 和 Docker Desktop，包含 F 盘路径与指定 Go 工具路径配置。首次部署请先阅读[运行说明](docs/LOCAL_SETUP.md)，确认环境与模型配置。
 
-启动后访问 **http://127.0.0.1:8080**。仓库提供源码和部署配置，不提供在线演示账号。
+启动后访问 **http://127.0.0.1:8080**。
 
 ## 技术组成
 
@@ -36,14 +36,13 @@
 ## 使用范围
 
 - 讲义支持 UTF-8 编码的 `.txt`、`.md` 文件，单个文件不超过 5 MiB。
-- 技能导入采用本项目的文本格式，不支持直接导入任意 `SKILL.md` 目录包或执行上传的程序。
-- 外部 MCP 支持 `2025-11-25` Streamable HTTP、HTTPS 公网地址和静态 Bearer 令牌；不支持 OAuth-only、stdio 或旧版 HTTP+SSE。
+- 技能导入采用本项目的文本格式。
+- 外部 MCP 支持 `2025-11-25` Streamable HTTP、HTTPS 公网地址和静态 Bearer 令牌。
 - 第三方模型与 MCP 服务的兼容性取决于其接口实现，需要针对所选服务验证。
-- 当前版本曾出现创建会话提示失败、但记录已保存的情况；遇到该提示请先刷新会话列表，避免重复创建。
 
 ## 文档
 
 - [项目报告](docs/report/CampusClaw_Report_v3.pdf)：模型请求、知识库、技能与 MCP 的实现说明。
 - [本地运行](docs/LOCAL_SETUP.md)：环境准备、启动与测试命令。
 - [设计文档](openspec/changes/)：功能需求与实现方案。
-- [开发记录](docs/PROJECT_HISTORY.md)：项目演进与验证记录。
+- [功能与处理流程](docs/PROJECT_HISTORY.md)：教师配置、学生使用和提问处理过程。
