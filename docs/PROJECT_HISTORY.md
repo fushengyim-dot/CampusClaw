@@ -36,4 +36,3 @@ CampusClaw 将课程资料、学习助手、技能和工具连接在一起，服
 - [项目介绍](../README.md)
 - [运行说明](LOCAL_SETUP.md)
 - [界面展示](evidence/browser/README.md)
-- [项目报告](report/CampusClaw_Report_v3.pdf)

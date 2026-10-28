@@ -42,7 +42,6 @@
 
 ## 文档
 
-- [项目报告](docs/report/CampusClaw_Report_v3.pdf)：模型请求、知识库、技能与 MCP 的实现说明。
 - [本地运行](docs/LOCAL_SETUP.md)：环境准备、启动与测试命令。
 - [设计文档](openspec/changes/)：功能需求与实现方案。
 - [功能与处理流程](docs/PROJECT_HISTORY.md)：教师配置、学生使用和提问处理过程。

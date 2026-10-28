@@ -6,7 +6,6 @@
 | [功能与处理流程](docs/PROJECT_HISTORY.md) | 教师配置、学生使用与请求处理 |
 | [运行说明](docs/LOCAL_SETUP.md) | 环境、配置、启动和开发检查 |
 | [界面展示](docs/evidence/browser/README.md) | 各功能页面截图 |
-| [项目报告](docs/report/CampusClaw_Report_v3.pdf) | 模型请求、知识库、技能和工具说明 |
 
 ## 源码结构
 
