@@ -1,0 +1,8 @@
+[
+  {"term":"SSE","keywords":["server-sent events","服务端推送"],"definition":"SSE 是服务器通过一条持续的 HTTP 响应，按顺序向浏览器推送文本事件的方式。"},
+  {"term":"MCP","keywords":["model context protocol","工具协议"],"definition":"MCP 是让宿主应用通过统一协议发现并调用外部工具的协议；模型提出调用，宿主负责校验和执行。"},
+  {"term":"JSON-RPC 2.0","keywords":["json rpc","远程调用"],"definition":"JSON-RPC 2.0 用 JSON 表示远程方法请求和响应；请求与响应通过同一个 id 对应。"},
+  {"term":"OpenAPI","keywords":["swagger","接口说明"],"definition":"OpenAPI 是用结构化文档描述 HTTP 接口、参数和响应的格式，可据此生成交互式接口文档。"},
+  {"term":"Docker Compose","keywords":["compose","容器编排"],"definition":"Docker Compose 用一个 YAML 文件描述多个容器服务、依赖、网络和数据挂载，便于本机统一启动。"},
+  {"term":"班级范围校验","keywords":["class scope","权限隔离"],"definition":"班级范围校验要求服务端从已登录用户读取 class_id，并将其加入每次查询条件；前端隐藏入口不能代替服务端授权。"}
+]

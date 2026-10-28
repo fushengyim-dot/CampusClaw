@@ -17,7 +17,7 @@ service-account*.json
 # 运行数据、缓存及自动生成结果
 runtime/
 uploads/
-data/
+/data/
 docs/**/internal/
 *.db
 *.sqlite
