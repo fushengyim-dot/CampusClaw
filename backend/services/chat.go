@@ -101,31 +101,9 @@ func (c *ChatClient) CompleteWithTools(ctx context.Context, messages []MCPModelM
 	if c == nil || c.http == nil || len(messages) < 2 || len(messages) > 32 || len(tools) > 32 {
 		return MCPModelTurn{}, ErrChatUnavailable
 	}
-	wireMessages := make([]map[string]any, 0, len(messages))
-	for i, message := range messages {
-		if message.Role != "system" && message.Role != "user" && message.Role != "assistant" && message.Role != "tool" || i == 0 && message.Role != "system" {
-			return MCPModelTurn{}, ErrChatUnavailable
-		}
-		row := map[string]any{"role": message.Role}
-		if message.Content != "" {
-			row["content"] = message.Content
-		} else if message.Role != "assistant" {
-			return MCPModelTurn{}, ErrChatUnavailable
-		}
-		if message.Role == "tool" {
-			if message.ToolCallID == "" || message.Name == "" {
-				return MCPModelTurn{}, ErrChatUnavailable
-			}
-			row["tool_call_id"], row["name"] = message.ToolCallID, message.Name
-		}
-		if message.Role == "assistant" && len(message.ToolCalls) > 0 {
-			calls := make([]map[string]any, 0, len(message.ToolCalls))
-			for _, call := range message.ToolCalls {
-				calls = append(calls, map[string]any{"id": call.ID, "type": "function", "function": map[string]any{"name": call.Name, "arguments": string(call.Arguments)}})
-			}
-			row["tool_calls"] = calls
-		}
-		wireMessages = append(wireMessages, row)
+	wireMessages, err := mcpWireMessages(messages)
+	if err != nil {
+		return MCPModelTurn{}, err
 	}
 	bodyValue := map[string]any{"model": c.model, "messages": wireMessages}
 	if len(tools) > 0 {
@@ -191,4 +169,37 @@ func (c *ChatClient) CompleteWithTools(ctx context.Context, messages []MCPModelM
 		return MCPModelTurn{}, ErrChatUnavailable
 	}
 	return turn, nil
+}
+
+func mcpWireMessages(messages []MCPModelMessage) ([]map[string]any, error) {
+	if len(messages) < 2 || len(messages) > 32 {
+		return nil, ErrChatUnavailable
+	}
+	wireMessages := make([]map[string]any, 0, len(messages))
+	for i, message := range messages {
+		if message.Role != "system" && message.Role != "user" && message.Role != "assistant" && message.Role != "tool" || i == 0 && message.Role != "system" {
+			return nil, ErrChatUnavailable
+		}
+		row := map[string]any{"role": message.Role}
+		if message.Content != "" {
+			row["content"] = message.Content
+		} else if message.Role != "assistant" {
+			return nil, ErrChatUnavailable
+		}
+		if message.Role == "tool" {
+			if message.ToolCallID == "" || message.Name == "" {
+				return nil, ErrChatUnavailable
+			}
+			row["tool_call_id"], row["name"] = message.ToolCallID, message.Name
+		}
+		if message.Role == "assistant" && len(message.ToolCalls) > 0 {
+			calls := make([]map[string]any, 0, len(message.ToolCalls))
+			for _, call := range message.ToolCalls {
+				calls = append(calls, map[string]any{"id": call.ID, "type": "function", "function": map[string]any{"name": call.Name, "arguments": string(call.Arguments)}})
+			}
+			row["tool_calls"] = calls
+		}
+		wireMessages = append(wireMessages, row)
+	}
+	return wireMessages, nil
 }

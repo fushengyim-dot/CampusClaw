@@ -55,8 +55,12 @@ func NewApplicationWithLesson5(auth *services.Auth, materials MaterialService, o
 	return NewApplicationWithLesson6(auth, materials, origin, search, chat, lesson5, nil)
 }
 
-func NewApplicationWithLesson6(auth *services.Auth, materials MaterialService, origin string, search KnowledgeService, chat services.ChatCompleter, lesson5 *services.Lesson5Store, mcp *services.MCPRegistry) http.Handler {
+func NewApplicationWithLesson6(auth *services.Auth, materials MaterialService, origin string, search KnowledgeService, chat services.ChatCompleter, lesson5 *services.Lesson5Store, mcp *services.MCPRegistry, registration ...*services.RegistrationStore) http.Handler {
 	sessions := loginRoutes(nil, auth, origin)
+	var registrations *services.RegistrationStore
+	if len(registration) > 0 {
+		registrations = registration[0]
+	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/openapi.json" {
 			serveOpenAPI(w, r)
@@ -75,6 +79,14 @@ func NewApplicationWithLesson6(auth *services.Auth, materials MaterialService, o
 				return
 			}
 			writeJSON(w, map[string]string{"status": "ok"})
+			return
+		}
+		if r.URL.Path == "/api/register" || strings.HasPrefix(r.URL.Path, "/api/teacher/invitations") {
+			if registrations == nil {
+				writeError(w, 404, "NOT_FOUND", "请求的资源不存在")
+				return
+			}
+			handleRegistration(w, r, auth, origin, registrations)
 			return
 		}
 		if r.URL.Path == "/api/login" || r.URL.Path == "/api/me" || r.URL.Path == "/api/logout" {

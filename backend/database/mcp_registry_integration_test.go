@@ -68,7 +68,7 @@ func TestMCPRegistryClassIsolationCiphertextAndDisconnect(t *testing.T) {
 		if _, e := db.ExecContext(cleanCtx, `DELETE FROM mcp_tool_calls WHERE class_id=? AND conversation_id IN (?,?)`, classA, conversationBase+1, conversationBase+2); e != nil {
 			t.Error("synthetic MCP audit cleanup failed")
 		}
-		if _, e := db.ExecContext(cleanCtx, `DELETE FROM mcp_servers WHERE class_id=? AND name=?`, classA, tag+"-server"); e != nil {
+		if _, e := db.ExecContext(cleanCtx, `DELETE FROM mcp_servers WHERE class_id=? AND name IN (?,?)`, classA, tag+"-server", tag+"-external"); e != nil {
 			t.Error("synthetic MCP server cleanup failed")
 		}
 		for _, query := range []string{`DELETE FROM conversation_messages WHERE class_id IN (?,?)`, `DELETE FROM conversations WHERE class_id IN (?,?)`, `DELETE FROM course_agent_materials WHERE class_id IN (?,?)`, `DELETE FROM course_agent_skills WHERE class_id IN (?,?)`, `DELETE FROM course_builtin_agents WHERE class_id IN (?,?)`, `DELETE FROM course_agents WHERE class_id IN (?,?)`, `DELETE FROM knowledge_entries WHERE class_id IN (?,?)`, `DELETE FROM materials WHERE class_id IN (?,?)`, `DELETE FROM sessions WHERE user_id IN (SELECT id FROM users WHERE class_id IN (?,?))`, `DELETE FROM assignments WHERE class_id IN (?,?)`, `DELETE FROM tutor_agents WHERE class_id IN (?,?)`, `DELETE FROM skills WHERE class_id IN (?,?)`} {
@@ -122,6 +122,24 @@ func TestMCPRegistryClassIsolationCiphertextAndDisconnect(t *testing.T) {
 	other, err := registry.List(ctx, classB)
 	if err != nil || len(other) != 0 {
 		t.Fatal("other class listed this server")
+	}
+	const externalToken = "distinct-external-mcp-token-123456"
+	if _, err = registry.Save(ctx, teacherA, 0, tag+"-external-no-token", "https://tools.example.org/mcp", ""); err == nil {
+		t.Fatal("external server registration did not require its own token")
+	}
+	externalID, err := registry.Save(ctx, teacherA, 0, tag+"-external", "https://tools.example.org/mcp", externalToken)
+	if err != nil {
+		t.Fatal("teacher could not register an external HTTPS MCP endpoint")
+	}
+	if _, err = registry.Save(ctx, teacherA, externalID, tag+"-external", "https://other.example.org/mcp", ""); err == nil {
+		t.Fatal("external endpoint change reused the old token")
+	}
+	if _, err = registry.Save(ctx, teacherA, externalID, tag+"-external", "https://tools.example.org/mcp", ""); err != nil {
+		t.Fatalf("same external endpoint could not retain its encrypted token: %v", err)
+	}
+	var externalCiphertext []byte
+	if db.QueryRowContext(ctx, `SELECT token_ciphertext FROM mcp_servers WHERE id=? AND class_id=?`, externalID, classA).Scan(&externalCiphertext) != nil || strings.Contains(string(externalCiphertext), externalToken) {
+		t.Fatal("external server token was not stored as ciphertext")
 	}
 	res, err := db.ExecContext(ctx, `INSERT INTO course_skills(class_id,name,trigger_text,tools_json,enabled,description,source_text) VALUES(?,?,'tool','[]',1,'synthetic','synthetic')`, classA, skillName)
 	if err != nil {

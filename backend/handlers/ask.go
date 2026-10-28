@@ -14,8 +14,9 @@ import (
 )
 
 type askInput struct {
-	Query   string                 `json:"q"`
-	History []services.ChatMessage `json:"history"`
+	Query             string                 `json:"q"`
+	History           []services.ChatMessage `json:"history"`
+	MaxEvidenceChunks *int                   `json:"max_evidence_chunks,omitempty"`
 }
 
 var answerCitation = regexp.MustCompile(`\[(\d+)\]`)
@@ -61,6 +62,14 @@ func handleAsk(w http.ResponseWriter, r *http.Request, auth *services.Auth, mate
 		writeError(w, 400, "INVALID_INPUT", "问题不能为空且不能超过1000字；对话历史最多保留8条")
 		return
 	}
+	maxEvidenceChunks := 1
+	if input.MaxEvidenceChunks != nil {
+		if *input.MaxEvidenceChunks < 1 || *input.MaxEvidenceChunks > 4 {
+			writeError(w, 400, "INVALID_INPUT", "本轮资料发送上限须为1至4段")
+			return
+		}
+		maxEvidenceChunks = *input.MaxEvidenceChunks
+	}
 	for _, message := range input.History {
 		if (message.Role != "user" && message.Role != "assistant") || strings.TrimSpace(message.Content) == "" || utf8.RuneCountInString(message.Content) > 2000 {
 			writeError(w, 400, "INVALID_INPUT", "对话历史格式不正确")
@@ -79,15 +88,15 @@ func handleAsk(w http.ResponseWriter, r *http.Request, auth *services.Auth, mate
 		return
 	}
 	if len(hits) == 0 {
-		writeJSON(w, map[string]any{"answer": noEvidenceAnswer, "citations": []services.KnowledgeHit{}})
+		writeJSON(w, map[string]any{"answer": noEvidenceAnswer, "citations": []services.KnowledgeHit{}, "evidence_count": 0, "max_evidence_chunks": maxEvidenceChunks})
 		return
 	}
 	if chat == nil {
 		writeError(w, 503, "ANSWER_UNAVAILABLE", "课程问答服务尚未配置")
 		return
 	}
-	if len(hits) > 4 {
-		hits = hits[:4]
+	if len(hits) > maxEvidenceChunks {
+		hits = hits[:maxEvidenceChunks]
 	}
 	messages := make([]services.ChatMessage, 0, len(input.History)+2)
 	messages = append(messages, services.ChatMessage{Role: "system", Content: evidenceSystemPrompt})
@@ -118,7 +127,7 @@ func handleAsk(w http.ResponseWriter, r *http.Request, auth *services.Auth, mate
 	if !validAnswerCitations(answer, len(hits)) {
 		answer = "我找到了相关课程资料，但回答未能给出可核对的编号引用。请先查看下方的 [1] 原文出处。"
 	}
-	writeJSON(w, map[string]any{"answer": answer, "citations": hits})
+	writeJSON(w, map[string]any{"answer": answer, "citations": hits, "evidence_count": len(hits), "max_evidence_chunks": maxEvidenceChunks})
 }
 
 func validAnswerCitations(answer string, citationCount int) bool {

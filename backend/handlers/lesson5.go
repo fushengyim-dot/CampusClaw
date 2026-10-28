@@ -386,18 +386,11 @@ func streamConversationWithMCP(w http.ResponseWriter, r *http.Request, s lesson5
 		return
 	}
 	messages[last].Content = assembleLesson5User(messages[last].Content, citations, templateInstruction)
-	toolEvents := []services.MCPToolEvent{}
-	toolAnswer := ""
 	structured := false
-	var toolErr error
 	if selected != nil && mcp != nil {
-		if model, ok := chat.(services.MCPToolModel); ok {
+		if _, ok := chat.(services.MCPToolModel); ok {
 			bound, boundErr := mcp.BoundTools(r.Context(), u.ClassID, selected.ID)
-			if boundErr == nil && len(bound) > 0 {
-				structured = true
-				orchestrator := services.MCPOrchestrator{Registry: mcp, Model: model}
-				toolAnswer, toolErr = orchestrator.Run(r.Context(), u, cid, selected.ID, messages, func(event services.MCPToolEvent) { toolEvents = append(toolEvents, event) }, func(string) error { return nil })
-			}
+			structured = boundErr == nil && len(bound) > 0
 		}
 	}
 	w.Header().Set("Content-Type", "text/event-stream; charset=utf-8")
@@ -405,19 +398,12 @@ func streamConversationWithMCP(w http.ResponseWriter, r *http.Request, s lesson5
 	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("X-Accel-Buffering", "no")
 	w.WriteHeader(200)
-	writeSSE(w, flusher, "meta", map[string]any{"status": "ok", "tools": toolEvents, "skill": func() any {
+	writeSSE(w, flusher, "meta", map[string]any{"status": "ok", "tools": []services.MCPToolEvent{}, "skill": func() any {
 		if selected == nil {
 			return nil
 		}
 		return map[string]string{"name": selected.Name}
 	}(), "citations": citations})
-	for _, event := range toolEvents {
-		writeSSE(w, flusher, "tool", event)
-	}
-	if structured && toolErr != nil {
-		writeSSE(w, flusher, "error", map[string]string{"message": "工具辅助回答暂时中断，请稍后重试"})
-		return
-	}
 	var answer strings.Builder
 	pending := ""
 	emit := func(piece string) error {
@@ -443,7 +429,10 @@ func streamConversationWithMCP(w http.ResponseWriter, r *http.Request, s lesson5
 	}
 	var streamErr error
 	if structured {
-		streamErr = emit(toolAnswer)
+		orchestrator := services.MCPOrchestrator{Registry: mcp, Model: chat.(services.MCPToolModel)}
+		_, streamErr = orchestrator.Run(r.Context(), u, cid, selected.ID, messages, func(event services.MCPToolEvent) {
+			writeSSE(w, flusher, "tool", event)
+		}, emit)
 	} else {
 		streamErr = streamer.Stream(r.Context(), messages, emit)
 	}

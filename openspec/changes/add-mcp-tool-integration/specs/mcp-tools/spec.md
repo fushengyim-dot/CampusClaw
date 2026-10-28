@@ -121,7 +121,8 @@ The system SHALL persist one auditable record for every call attributable to a r
 #### Scenario: Emit tool call details before answer text
 
 - **WHEN** a response uses one or more tools
-- **THEN** the initial SSE `meta` event includes a bounded tool-call summary before any `delta` event
+- **THEN** the initial SSE `meta` event starts the response before tool execution, with an empty initial tool list allowed
+- **AND** subsequent `tool` events immediately report running and terminal states before any answer `delta` event
 - **AND** the UI displays the tool name and outcome before the streamed answer text
 
 #### Scenario: Do not log an un-attributable unknown server

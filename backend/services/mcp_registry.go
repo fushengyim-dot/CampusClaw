@@ -1,6 +1,7 @@
 package services
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"crypto/aes"
@@ -15,6 +16,9 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/netip"
+	"net/url"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -54,9 +58,14 @@ type MCPBoundTool struct {
 }
 
 type MCPRegistry struct {
-	db     *sql.DB
-	key    [32]byte
-	client *http.Client
+	db       *sql.DB
+	key      [32]byte
+	client   *http.Client
+	resolver interface {
+		LookupIPAddr(context.Context, string) ([]net.IPAddr, error)
+	}
+	dialer *net.Dialer
+	dial   func(context.Context, string, string) (net.Conn, error)
 }
 
 func NewMCPRegistry(db *sql.DB, sessionSecret string) (*MCPRegistry, error) {
@@ -67,8 +76,98 @@ func NewMCPRegistry(db *sql.DB, sessionSecret string) (*MCPRegistry, error) {
 	_, _ = mac.Write([]byte("campusclaw:mcp-token-encryption:v1"))
 	var key [32]byte
 	copy(key[:], mac.Sum(nil))
-	transport := &http.Transport{Proxy: nil, DialContext: (&net.Dialer{Timeout: 3 * time.Second}).DialContext, TLSHandshakeTimeout: 3 * time.Second, ResponseHeaderTimeout: 3 * time.Second, DisableKeepAlives: true}
-	return &MCPRegistry{db: db, key: key, client: &http.Client{Transport: transport, Timeout: 5 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}}, nil
+	dialer := &net.Dialer{Timeout: 3 * time.Second}
+	registry := &MCPRegistry{db: db, key: key, resolver: net.DefaultResolver, dialer: dialer, dial: dialer.DialContext}
+	transport := &http.Transport{Proxy: nil, DialContext: registry.dialMCP, TLSHandshakeTimeout: 3 * time.Second, ResponseHeaderTimeout: 3 * time.Second, DisableKeepAlives: true}
+	registry.client = newMCPHTTPClient(transport)
+	return registry, nil
+}
+
+func newMCPHTTPClient(transport http.RoundTripper) *http.Client {
+	return &http.Client{Transport: transport, Timeout: 5 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+}
+
+func (s *MCPRegistry) dialMCP(ctx context.Context, network, address string) (net.Conn, error) {
+	host, port, err := net.SplitHostPort(address)
+	if err != nil || s.dial == nil {
+		return nil, ErrMCPUnavailable
+	}
+	if host == "mcp-tools" && port == "8091" {
+		return s.dial(ctx, network, address)
+	}
+	if s.resolver == nil || s.dial == nil {
+		return nil, ErrMCPUnavailable
+	}
+	addresses, err := s.resolver.LookupIPAddr(ctx, host)
+	if err != nil || len(addresses) == 0 {
+		return nil, ErrMCPUnavailable
+	}
+	for _, address := range addresses {
+		if !allowedExternalMCPIP(address.IP) {
+			return nil, ErrMCPUnavailable
+		}
+	}
+	// Dial the checked IP directly so DNS cannot change between validation and use.
+	return s.dial(ctx, network, net.JoinHostPort(addresses[0].IP.String(), port))
+}
+
+func allowedExternalMCPIP(ip net.IP) bool {
+	address, ok := netip.AddrFromSlice(ip)
+	if !ok {
+		return false
+	}
+	address = address.Unmap()
+	if !address.Is4() || !address.IsGlobalUnicast() || address.IsPrivate() || address.IsLoopback() || address.IsLinkLocalUnicast() || address.IsLinkLocalMulticast() || address.IsMulticast() || address.IsUnspecified() {
+		return false
+	}
+	blocked := []netip.Prefix{
+		netip.MustParsePrefix("0.0.0.0/8"), netip.MustParsePrefix("100.64.0.0/10"), netip.MustParsePrefix("192.0.0.0/24"),
+		netip.MustParsePrefix("192.0.2.0/24"), netip.MustParsePrefix("192.88.99.0/24"), netip.MustParsePrefix("198.18.0.0/15"),
+		netip.MustParsePrefix("198.51.100.0/24"), netip.MustParsePrefix("203.0.113.0/24"), netip.MustParsePrefix("224.0.0.0/4"), netip.MustParsePrefix("240.0.0.0/4"),
+	}
+	for _, prefix := range blocked {
+		if prefix.Contains(address) {
+			return false
+		}
+	}
+	return true
+}
+
+func validMCPServerEndpoint(endpoint string) bool {
+	if endpoint == builtinMCPEndpoint {
+		return true
+	}
+	u, err := url.Parse(endpoint)
+	if err != nil || u.Scheme != "https" || u.Opaque != "" || u.User != nil || u.RawQuery != "" || u.ForceQuery || u.Fragment != "" || strings.Contains(endpoint, "#") || u.Host == "" || len(endpoint) > 512 {
+		return false
+	}
+	host := strings.TrimSuffix(strings.ToLower(u.Hostname()), ".")
+	if host == "" || host == "localhost" || strings.HasSuffix(host, ".localhost") || strings.HasSuffix(host, ".local") {
+		return false
+	}
+	if ip := net.ParseIP(host); ip != nil {
+		return allowedExternalMCPIP(ip)
+	}
+	if !strings.Contains(host, ".") || len(host) > 253 {
+		return false
+	}
+	for _, label := range strings.Split(host, ".") {
+		if len(label) == 0 || len(label) > 63 || label[0] == '-' || label[len(label)-1] == '-' {
+			return false
+		}
+		for _, r := range label {
+			if !(r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || r == '-') {
+				return false
+			}
+		}
+	}
+	if port := u.Port(); port != "" {
+		value, err := strconv.ParseUint(port, 10, 16)
+		if err != nil || value == 0 {
+			return false
+		}
+	}
+	return true
 }
 
 func (s *MCPRegistry) encrypt(token string) ([]byte, error) {
@@ -223,11 +322,21 @@ func (s *MCPRegistry) Save(ctx context.Context, user repositories.User, id int64
 		return 0, ErrNotTeacher
 	}
 	name = strings.TrimSpace(name)
-	if utf8.RuneCountInString(name) < 1 || utf8.RuneCountInString(name) > 64 || strings.ContainsAny(name, "@/\\\r\n\x00") || endpoint != builtinMCPEndpoint {
+	if utf8.RuneCountInString(name) < 1 || utf8.RuneCountInString(name) > 64 || strings.ContainsAny(name, "@/\\\r\n\x00") || !validMCPServerEndpoint(endpoint) {
+		return 0, ErrMCPInvalid
+	}
+	if id == 0 && endpoint != builtinMCPEndpoint && token == "" {
 		return 0, ErrMCPInvalid
 	}
 	if token != "" && !validMCPToken(token) {
 		return 0, ErrMCPInvalid
+	}
+	if id > 0 && token == "" && endpoint != builtinMCPEndpoint {
+		var oldEndpoint string
+		var tokenConfigured bool
+		if s.db.QueryRowContext(ctx, `SELECT endpoint,token_ciphertext IS NOT NULL FROM mcp_servers WHERE id=? AND class_id=?`, id, user.ClassID).Scan(&oldEndpoint, &tokenConfigured) != nil || oldEndpoint != endpoint || !tokenConfigured {
+			return 0, ErrMCPInvalid
+		}
 	}
 	var enc []byte
 	var err error
@@ -264,7 +373,10 @@ func (s *MCPRegistry) Save(ctx context.Context, user repositories.User, id int64
 		}
 		n, _ := res.RowsAffected()
 		if n == 0 {
-			return 0, ErrMCPUnavailable
+			var stillExists int
+			if s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM mcp_servers WHERE id=? AND class_id=?`, id, user.ClassID).Scan(&stillExists) != nil || stillExists != 1 {
+				return 0, ErrMCPUnavailable
+			}
 		}
 	} else {
 		var exists int
@@ -277,7 +389,10 @@ func (s *MCPRegistry) Save(ctx context.Context, user repositories.User, id int64
 		}
 		n, _ := res.RowsAffected()
 		if n == 0 {
-			return 0, ErrMCPUnavailable
+			var stillExists int
+			if s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM mcp_servers WHERE id=? AND class_id=?`, id, user.ClassID).Scan(&stillExists) != nil || stillExists != 1 {
+				return 0, ErrMCPUnavailable
+			}
 		}
 	}
 	return id, nil
@@ -547,7 +662,7 @@ func ValidateMCPArguments(schemaJSON json.RawMessage, arguments map[string]any) 
 }
 
 func (s *MCPRegistry) CallTool(ctx context.Context, bound MCPBoundTool, arguments map[string]any) (MCPCallResult, error) {
-	if bound.Endpoint != builtinMCPEndpoint || !validMCPToken(bound.Token) || !validToolName(bound.Tool.Name) || ValidateMCPArguments(bound.Tool.InputSchema, arguments) != nil {
+	if !validMCPServerEndpoint(bound.Endpoint) || !validMCPToken(bound.Token) || !validToolName(bound.Tool.Name) || ValidateMCPArguments(bound.Tool.InputSchema, arguments) != nil {
 		return MCPCallResult{IsError: true}, ErrMCPInvalid
 	}
 	params := map[string]any{"name": bound.Tool.Name, "arguments": arguments}
@@ -560,7 +675,12 @@ func (s *MCPRegistry) CallTool(ctx context.Context, bound MCPBoundTool, argument
 			IsError bool `json:"isError"`
 		} `json:"result"`
 	}
-	if err := s.rpc(ctx, bound.Endpoint, bound.Token, "tools/call", params, "2025-11-25", &envelope); err != nil {
+	protocolVersion, sessionID, err := s.initializeRemote(ctx, bound.Endpoint, bound.Token)
+	if err != nil {
+		return MCPCallResult{IsError: true}, ErrMCPUnavailable
+	}
+	defer s.terminateRemote(ctx, bound.Endpoint, bound.Token, protocolVersion, sessionID)
+	if _, err = s.rpcSession(ctx, bound.Endpoint, bound.Token, "tools/call", params, protocolVersion, sessionID, &envelope); err != nil {
 		return MCPCallResult{IsError: true}, ErrMCPUnavailable
 	}
 	var b strings.Builder
@@ -665,25 +785,14 @@ func (s *MCPRegistry) CallHistory(ctx context.Context, user repositories.User, l
 }
 
 func (s *MCPRegistry) discoverRemote(ctx context.Context, endpoint, token string) ([]MCPDiscoveredTool, error) {
-	if endpoint != builtinMCPEndpoint {
+	if !validMCPServerEndpoint(endpoint) || !validMCPToken(token) {
 		return nil, ErrMCPInvalid
 	}
-	var init struct {
-		ProtocolVersion string            `json:"protocolVersion"`
-		ClientInfo      map[string]string `json:"clientInfo"`
-		Capabilities    map[string]any    `json:"capabilities"`
-	}
-	init.ProtocolVersion = "2025-11-25"
-	init.ClientInfo = map[string]string{"name": "campusclaw-host", "version": "0.1.0"}
-	init.Capabilities = map[string]any{}
-	var ack struct {
-		Result struct {
-			ProtocolVersion string `json:"protocolVersion"`
-		} `json:"result"`
-	}
-	if err := s.rpc(ctx, endpoint, token, "initialize", init, "", &ack); err != nil || ack.Result.ProtocolVersion != "2025-11-25" {
+	protocolVersion, sessionID, err := s.initializeRemote(ctx, endpoint, token)
+	if err != nil {
 		return nil, ErrMCPUnavailable
 	}
+	defer s.terminateRemote(ctx, endpoint, token, protocolVersion, sessionID)
 	var listed struct {
 		Result struct {
 			Tools []struct {
@@ -693,7 +802,7 @@ func (s *MCPRegistry) discoverRemote(ctx context.Context, endpoint, token string
 			} `json:"tools"`
 		} `json:"result"`
 	}
-	if err := s.rpc(ctx, endpoint, token, "tools/list", map[string]any{}, "2025-11-25", &listed); err != nil {
+	if _, err := s.rpcSession(ctx, endpoint, token, "tools/list", map[string]any{}, protocolVersion, sessionID, &listed); err != nil {
 		return nil, ErrMCPUnavailable
 	}
 	if len(listed.Result.Tools) == 0 || len(listed.Result.Tools) > 64 {
@@ -728,7 +837,39 @@ func (s *MCPRegistry) discoverRemote(ctx context.Context, endpoint, token string
 }
 
 func (s *MCPRegistry) rpc(ctx context.Context, endpoint, token, method string, params any, version string, out any) error {
-	body, err := json.Marshal(map[string]any{"jsonrpc": "2.0", "id": 1, "method": method, "params": params})
+	_, err := s.rpcSession(ctx, endpoint, token, method, params, version, "", out)
+	return err
+}
+
+func (s *MCPRegistry) initializeRemote(ctx context.Context, endpoint, token string) (string, string, error) {
+	if !validMCPServerEndpoint(endpoint) || !validMCPToken(token) {
+		return "", "", ErrMCPInvalid
+	}
+	var input struct {
+		ProtocolVersion string            `json:"protocolVersion"`
+		ClientInfo      map[string]string `json:"clientInfo"`
+		Capabilities    map[string]any    `json:"capabilities"`
+	}
+	input.ProtocolVersion = "2025-11-25"
+	input.ClientInfo = map[string]string{"name": "campusclaw-host", "version": "0.1.0"}
+	input.Capabilities = map[string]any{}
+	var ack struct {
+		Result struct {
+			ProtocolVersion string `json:"protocolVersion"`
+		} `json:"result"`
+	}
+	sessionID, err := s.rpcSession(ctx, endpoint, token, "initialize", input, "", "", &ack)
+	if err != nil || ack.Result.ProtocolVersion != "2025-11-25" {
+		return "", "", ErrMCPUnavailable
+	}
+	if err = s.notifyInitialized(ctx, endpoint, token, ack.Result.ProtocolVersion, sessionID); err != nil {
+		return "", "", err
+	}
+	return ack.Result.ProtocolVersion, sessionID, nil
+}
+
+func (s *MCPRegistry) notifyInitialized(ctx context.Context, endpoint, token, version, sessionID string) error {
+	body, err := json.Marshal(map[string]any{"jsonrpc": "2.0", "method": "notifications/initialized"})
 	if err != nil {
 		return ErrMCPUnavailable
 	}
@@ -739,20 +880,82 @@ func (s *MCPRegistry) rpc(ctx context.Context, endpoint, token, method string, p
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json, text/event-stream")
-	if version != "" {
-		req.Header.Set("MCP-Protocol-Version", version)
+	req.Header.Set("MCP-Protocol-Version", version)
+	if sessionID != "" {
+		req.Header.Set("MCP-Session-Id", sessionID)
 	}
 	resp, err := s.client.Do(req)
 	if err != nil {
 		return ErrMCPUnavailable
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
+	data, err := io.ReadAll(io.LimitReader(resp.Body, 1))
+	if err != nil || resp.StatusCode != http.StatusAccepted || len(data) != 0 {
 		return ErrMCPUnavailable
+	}
+	return nil
+}
+
+func (s *MCPRegistry) terminateRemote(ctx context.Context, endpoint, token, version, sessionID string) {
+	if sessionID == "" || s.client == nil {
+		return
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, endpoint, nil)
+	if err != nil {
+		return
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("MCP-Protocol-Version", version)
+	req.Header.Set("MCP-Session-Id", sessionID)
+	resp, err := s.client.Do(req)
+	if err != nil {
+		return
+	}
+	defer resp.Body.Close()
+	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 4096))
+}
+
+func (s *MCPRegistry) rpcSession(ctx context.Context, endpoint, token, method string, params any, version, sessionID string, out any) (string, error) {
+	if !validMCPServerEndpoint(endpoint) || !validMCPToken(token) {
+		return "", ErrMCPUnavailable
+	}
+	body, err := json.Marshal(map[string]any{"jsonrpc": "2.0", "id": 1, "method": method, "params": params})
+	if err != nil {
+		return "", ErrMCPUnavailable
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
+	if err != nil {
+		return "", ErrMCPUnavailable
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json, text/event-stream")
+	if version != "" {
+		req.Header.Set("MCP-Protocol-Version", version)
+	}
+	if sessionID != "" {
+		req.Header.Set("MCP-Session-Id", sessionID)
+	}
+	resp, err := s.client.Do(req)
+	if err != nil {
+		return "", ErrMCPUnavailable
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "", ErrMCPUnavailable
 	}
 	data, err := io.ReadAll(io.LimitReader(resp.Body, 256*1024+1))
 	if err != nil || len(data) > 256*1024 {
-		return ErrMCPUnavailable
+		return "", ErrMCPUnavailable
+	}
+	contentType := strings.ToLower(strings.TrimSpace(strings.Split(resp.Header.Get("Content-Type"), ";")[0]))
+	if contentType == "text/event-stream" {
+		data, err = mcpSSEResponse(data)
+	} else if contentType != "application/json" {
+		return "", ErrMCPUnavailable
+	}
+	if err != nil {
+		return "", ErrMCPUnavailable
 	}
 	var envelope struct {
 		JSONRPC string          `json:"jsonrpc"`
@@ -761,9 +964,60 @@ func (s *MCPRegistry) rpc(ctx context.Context, endpoint, token, method string, p
 		Result  json.RawMessage `json:"result"`
 	}
 	if json.Unmarshal(data, &envelope) != nil || envelope.JSONRPC != "2.0" || string(envelope.ID) != "1" || len(envelope.Error) > 0 && string(envelope.Error) != "null" || len(envelope.Result) == 0 {
-		return ErrMCPUnavailable
+		return "", ErrMCPUnavailable
 	}
-	return json.Unmarshal(data, out)
+	if json.Unmarshal(data, out) != nil {
+		return "", ErrMCPUnavailable
+	}
+	responseSession := resp.Header.Get("MCP-Session-Id")
+	if len(responseSession) > 256 || strings.ContainsAny(responseSession, "\r\n\x00") {
+		return "", ErrMCPUnavailable
+	}
+	for _, r := range responseSession {
+		if r < 0x21 || r > 0x7e {
+			return "", ErrMCPUnavailable
+		}
+	}
+	return responseSession, nil
+}
+
+func mcpSSEResponse(data []byte) ([]byte, error) {
+	scanner := bufio.NewScanner(bytes.NewReader(data))
+	scanner.Buffer(make([]byte, 4096), 256*1024)
+	var payload strings.Builder
+	for scanner.Scan() {
+		line := scanner.Text()
+		if line == "" {
+			if payload.Len() > 0 {
+				candidate := []byte(payload.String())
+				var response map[string]json.RawMessage
+				if json.Unmarshal(candidate, &response) == nil {
+					if id, ok := response["id"]; ok && string(id) == "1" {
+						return candidate, nil
+					}
+				}
+				payload.Reset()
+			}
+			continue
+		}
+		if strings.HasPrefix(line, "data:") {
+			if payload.Len() > 0 {
+				payload.WriteByte('\n')
+			}
+			payload.WriteString(strings.TrimPrefix(strings.TrimPrefix(line, "data:"), " "))
+		}
+	}
+	if scanner.Err() != nil {
+		return nil, scanner.Err()
+	}
+	if payload.Len() > 0 {
+		candidate := []byte(payload.String())
+		var response map[string]json.RawMessage
+		if json.Unmarshal(candidate, &response) == nil && string(response["id"]) == "1" {
+			return candidate, nil
+		}
+	}
+	return nil, ErrMCPUnavailable
 }
 
 func validMCPToken(token string) bool {

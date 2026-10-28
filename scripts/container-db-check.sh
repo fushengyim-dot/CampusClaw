@@ -35,7 +35,7 @@ fi
 if [ "${1:-check}" = test-schema ]; then
     export CAMPUSCLAW_MYSQL_INTEGRATION=1
     export CAMPUSCLAW_SCHEMA_INTEGRATION=1
-    exec /check/bin/database-tests -test.v -test.run '^(TestSchemaIntegration|TestNgramParserIntegration|TestBuiltinAgentSeedIntegration|TestLesson5ConversationOwnershipAndContextIntegration|TestLesson5AgentAndSkillManagementIntegration|TestMCPRegistryClassIsolationCiphertextAndDisconnect)$'
+    exec /check/bin/database-tests -test.v -test.run '^(TestSchemaIntegration|TestAccountRegistrationIntegration|TestNgramParserIntegration|TestBuiltinAgentSeedIntegration|TestLesson5ConversationOwnershipAndContextIntegration|TestLesson5AgentAndSkillManagementIntegration|TestMCPRegistryClassIsolationCiphertextAndDisconnect)$'
 fi
 if [ "${1:-check}" = test-ngram ]; then
     export CAMPUSCLAW_MYSQL_INTEGRATION=1

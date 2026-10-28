@@ -26,7 +26,23 @@ func (c *ChatClient) Stream(ctx context.Context, messages []ChatMessage, emit fu
 			return ErrChatStreamUnavailable
 		}
 	}
-	body, err := json.Marshal(map[string]any{"model": c.model, "messages": messages, "stream": true})
+	return c.streamPayload(ctx, map[string]any{"model": c.model, "messages": messages, "stream": true}, emit)
+}
+
+// StreamToolAnswer generates new text from the validated tool conversation.
+func (c *ChatClient) StreamToolAnswer(ctx context.Context, messages []MCPModelMessage, emit func(string) error) error {
+	if c == nil || c.http == nil || emit == nil {
+		return ErrChatStreamUnavailable
+	}
+	wire, err := mcpWireMessages(messages)
+	if err != nil {
+		return ErrChatStreamUnavailable
+	}
+	return c.streamPayload(ctx, map[string]any{"model": c.model, "messages": wire, "stream": true, "tool_choice": "none"}, emit)
+}
+
+func (c *ChatClient) streamPayload(ctx context.Context, payload map[string]any, emit func(string) error) error {
+	body, err := json.Marshal(payload)
 	if err != nil || len(body) > 20*1024*1024 {
 		return ErrChatStreamUnavailable
 	}
@@ -86,10 +102,7 @@ func (c *ChatClient) Stream(ctx context.Context, messages []ChatMessage, emit fu
 			return ErrChatStreamUnavailable
 		}
 	}
-	if scanner.Err() != nil || answer == 0 {
-		return ErrChatStreamUnavailable
-	}
-	return nil
+	return ErrChatStreamUnavailable
 }
 
 // LocalStubStreamer is used only for offline acceptance; it never performs network I/O.

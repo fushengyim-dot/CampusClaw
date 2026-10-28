@@ -6,6 +6,8 @@
 
 ## 页面功能
 
+- `16-registration-login.png`：新版本登录页真实浏览器截图，显示“前往注册”入口。未填写或展示任何账号密码。注册表单页面已在本机浏览器中打开，并通过无障碍页面树确认包含邀请码、用户名和密码输入项，且没有角色/班级选择；截图文件保存时浏览器截图功能超时，因此该表单截图仍待补。
+
 - `01-apps-home.png`、`12-apps-second-third.png`：首页三个内置应用及其入口。
 - `10-prompt-template-selected.png`：从“讲义问答”应用入口打开会话后，选择“概念解释”模板。
 - `02-materials-knowledge-base.png`、`13-knowledge-retrieval-boundary.png`：本班讲义、检索方式，以及页面说明的最多4段资料检索边界。

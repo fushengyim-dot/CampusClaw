@@ -233,7 +233,7 @@ type mcpServerRequest struct {
 func writeMCPError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, services.ErrMCPInvalid):
-		writeError(w, 400, "INVALID_INPUT", "服务器名称、地址或令牌格式不正确；地址仅支持本项目内置工具服务")
+		writeError(w, 400, "INVALID_INPUT", "服务器名称、地址或令牌格式不正确；外部地址须使用 HTTPS 公网服务器")
 	case errors.Is(err, services.ErrNotTeacher):
 		writeError(w, 404, "NOT_FOUND", "请求的资源不存在")
 	default:

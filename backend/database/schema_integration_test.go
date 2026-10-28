@@ -217,8 +217,8 @@ func TestSchemaIntegration(t *testing.T) {
 		t.Fatal("failure/concurrent checks changed rows")
 	}
 	var versions int
-	if db.QueryRowContext(ctx, "SELECT COUNT(*) FROM schema_migrations WHERE version BETWEEN 1 AND 7 AND completed_at IS NOT NULL").Scan(&versions) != nil || versions != 7 {
-		t.Fatal("all seven migration completions were not recorded exactly once")
+	if db.QueryRowContext(ctx, "SELECT COUNT(*) FROM schema_migrations WHERE version BETWEEN 1 AND 8 AND completed_at IS NOT NULL").Scan(&versions) != nil || versions != 8 {
+		t.Fatal("all eight migration completions were not recorded exactly once")
 	}
 	t.Log("CHECK: concurrent initialization serialized; no duplicate version or rows")
 }

@@ -1,18 +1,122 @@
 package handlers
 
 import (
+	"bufio"
 	"context"
 	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"campusclaw/backend/repositories"
 	"campusclaw/backend/services"
 )
+
+type lesson6StreamingChatStub struct {
+	lesson6ChatStub
+	release <-chan struct{}
+	fail    bool
+}
+
+type lesson6GatedRegistry struct {
+	lesson6RegistryStub
+	release <-chan struct{}
+}
+
+func (s *lesson6GatedRegistry) CallTool(ctx context.Context, tool services.MCPBoundTool, args map[string]any) (services.MCPCallResult, error) {
+	select {
+	case <-s.release:
+	case <-ctx.Done():
+		return services.MCPCallResult{}, ctx.Err()
+	}
+	return s.lesson6RegistryStub.CallTool(ctx, tool, args)
+}
+
+func (c *lesson6StreamingChatStub) StreamToolAnswer(ctx context.Context, _ []services.MCPModelMessage, emit func(string) error) error {
+	if err := emit("先收到这一段。"); err != nil {
+		return err
+	}
+	select {
+	case <-c.release:
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+	if c.fail {
+		return errors.New("private provider failure must not be exposed")
+	}
+	return emit("再收到第二段。")
+}
+
+func TestLesson6HTTPStreamsBeforeCompletionAndPersistsPartialFailure(t *testing.T) {
+	for _, fail := range []bool{false, true} {
+		name := "success"
+		if fail {
+			name = "partial-failure"
+		}
+		t.Run(name, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+			defer cancel()
+			release := make(chan struct{})
+			releaseTool := make(chan struct{})
+			store := &lesson5StreamStoreStub{agent: services.Agent{Prompt: "rules"}, skills: []services.RoutedSkill{{ID: 5, Name: "课程工具", TriggerText: "协议", Enabled: true, Bound: true}}}
+			registry := &lesson6GatedRegistry{lesson6RegistryStub: lesson6RegistryStub{bound: []services.MCPBoundTool{{ServerID: 2, ServerName: "campus-tools", Tool: services.MCPDiscoveredTool{Name: "lookup_course_term", InputSchema: json.RawMessage(`{"type":"object","properties":{"term":{"type":"string"}},"required":["term"],"additionalProperties":false}`)}}}}, release: releaseTool}
+			hash := sha256.Sum256([]byte("lookup_course_term@campus-tools"))
+			model := &lesson6StreamingChatStub{lesson6ChatStub: lesson6ChatStub{turns: []services.MCPModelTurn{{ToolCalls: []services.MCPProposedCall{{ID: "first-call", Name: "mcp_" + hex.EncodeToString(hash[:8]), Arguments: json.RawMessage(`{"term":"MCP"}`)}}}, {Content: "do not replay this draft"}}}, release: release, fail: fail}
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				streamConversationWithMCP(w, r, store, repositories.User{ID: 3, ClassID: 4, Role: "student"}, 7, lesson5KnowledgeStub{}, model, registry)
+			}))
+			defer server.Close()
+			req, _ := http.NewRequestWithContext(ctx, http.MethodPost, server.URL, strings.NewReader(`{"content":"解释协议"}`))
+			response, err := server.Client().Do(req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer response.Body.Close()
+			reader := bufio.NewReader(response.Body)
+			var prefix strings.Builder
+			for !strings.Contains(prefix.String(), `"status":"running"`) {
+				line, err := reader.ReadString('\n')
+				if err != nil {
+					t.Fatal("running event was delayed until tool completion", err)
+				}
+				prefix.WriteString(line)
+			}
+			close(releaseTool)
+			for !strings.Contains(prefix.String(), "先收到这一段。") {
+				line, err := reader.ReadString('\n')
+				if err != nil {
+					t.Fatal("first text did not arrive before release", err)
+				}
+				prefix.WriteString(line)
+			}
+			if !strings.Contains(prefix.String(), "event: meta") || strings.Contains(prefix.String(), "event: done") {
+				t.Fatal("invalid early stream sequence")
+			}
+			close(release)
+			rest, err := io.ReadAll(reader)
+			if err != nil {
+				t.Fatal(err)
+			}
+			all := prefix.String() + string(rest)
+			if !strings.Contains(all, "event: done") || strings.Contains(all, "do not replay") || strings.Contains(all, "private provider") {
+				t.Fatal("final response lost persistence or exposed draft/error")
+			}
+			if fail {
+				if store.saved != "先收到这一段。" || !strings.Contains(all, "event: error") {
+					t.Fatal("partial failure not saved and reported")
+				}
+			} else if store.saved != "先收到这一段。再收到第二段。" || strings.Count(all, "event: delta") != 2 {
+				t.Fatal("incremental response not saved")
+			}
+		})
+	}
+}
 
 type lesson5StreamStoreStub struct {
 	agent          services.Agent

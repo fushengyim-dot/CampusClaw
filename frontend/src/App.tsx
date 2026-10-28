@@ -2,6 +2,7 @@ import { FormEvent, ReactNode, useCallback, useEffect, useState } from 'react';
 import { Tutor } from './Tutor';
 import { Applications } from './Applications';
 import { MCPAdmin } from './MCPAdmin';
+import { AccountInvitations, Registration } from './Registration';
 
 type User = { id: number; username: string; role: 'teacher' | 'student'; class_id: number };
 type Material = { id: number; title: string; original_filename: string; size_bytes: number; source_url: string | null; source_locator: string | null; created_at: string };
@@ -37,9 +38,12 @@ export function App() {
   const [vectorNotice, setVectorNotice] = useState('');
   const [vectorBusy, setVectorBusy] = useState(false);
   const [askQuestion, setAskQuestion] = useState('');
+  const [askMaxEvidenceChunks, setAskMaxEvidenceChunks] = useState(1);
   const [askHistory, setAskHistory] = useState<{ role: 'user' | 'assistant'; content: string }[]>([]);
   const [askAnswer, setAskAnswer] = useState('');
   const [askCitations, setAskCitations] = useState<SearchHit[]>([]);
+  const [askEvidenceCount, setAskEvidenceCount] = useState<number | null>(null);
+  const [askEvidenceLimit, setAskEvidenceLimit] = useState(1);
   const [askNotice, setAskNotice] = useState('');
   const [askBusy, setAskBusy] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -55,7 +59,7 @@ export function App() {
 
   useEffect(() => {
     request<User>('/api/me').then((me) => { setUser(me); setChecking(false); if (window.location.pathname === '/login' || window.location.pathname === '/') go('/apps'); })
-      .catch((e: Error & { status?: number }) => { setChecking(false); if (e.status === 401) { setUser(null); if (window.location.pathname !== '/login') go('/login'); } else setNotice(e.message); });
+      .catch((e: Error & { status?: number }) => { setChecking(false); if (e.status === 401) { setUser(null); if (window.location.pathname !== '/login' && window.location.pathname !== '/register') go('/login'); } else setNotice(e.message); });
   }, [go]);
 
   useEffect(() => {
@@ -113,10 +117,11 @@ export function App() {
   }
 
   async function ask(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault(); setAskBusy(true); setAskNotice(''); setAskAnswer(''); setAskCitations([]);
+    event.preventDefault(); setAskBusy(true); setAskNotice(''); setAskAnswer(''); setAskCitations([]); setAskEvidenceCount(null);
     try {
-      const result = await request<{ answer: string; citations: SearchHit[] }>('/api/ask', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ q: askQuestion, history: askHistory }) });
+      const result = await request<{ answer: string; citations: SearchHit[]; evidence_count: number; max_evidence_chunks: number }>('/api/ask', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ q: askQuestion, history: askHistory, max_evidence_chunks: askMaxEvidenceChunks }) });
       setAskAnswer(result.answer); setAskCitations(result.citations);
+      setAskEvidenceCount(result.evidence_count); setAskEvidenceLimit(result.max_evidence_chunks);
       const turns: { role: 'user' | 'assistant'; content: string }[] = [{ role: 'user', content: askQuestion }, { role: 'assistant', content: result.answer }];
       setAskHistory((history) => [...history, ...turns].slice(-8));
     } catch (e) { setAskNotice((e as Error).message); }
@@ -124,11 +129,13 @@ export function App() {
   }
 
   if (checking) return <Shell><p role="status">正在确认登录状态…</p></Shell>;
-  if (!user) return <Shell><section className="login-card"><p className="eyebrow">CampusClaw · 软件开发课程</p><h1>登录学习平台</h1><p className="muted">使用老师提供的课程账号进入本班讲义。</p><form onSubmit={login}><label>用户名<input name="username" autoComplete="username" required /></label><label>密码<input name="password" type="password" autoComplete="current-password" required /></label><button disabled={busy}>{busy ? '正在登录…' : '登录'}</button></form><Status notice={notice} /></section></Shell>;
+  if (!user && route==='/register') return <Shell><Registration onRegistered={()=>{request<User>('/api/me').then(me=>{setUser(me);go('/apps');}).catch(()=>{go('/login');setNotice('注册已完成，请使用新账号登录。');});}} onBack={()=>go('/login')} /></Shell>;
+  if (!user) return <Shell><section className="login-card"><p className="eyebrow">CampusClaw · 软件开发课程</p><h1>登录学习平台</h1><p className="muted">使用本班账号进入课程平台。</p><form onSubmit={login}><label>用户名<input name="username" autoComplete="username" required /></label><label>密码<input name="password" type="password" autoComplete="current-password" required /></label><button disabled={busy}>{busy ? '正在登录…' : '登录'}</button></form><Status notice={notice} /><p className="muted">已有本班教师发的邀请码？ <a href="/register" onClick={e=>{e.preventDefault();go('/register');}}>前往注册</a></p></section></Shell>;
 
   if (route === '/apps') return <Shell user={user} onLogout={logout} busy={busy}><Applications onOpen={(key)=>go(`/tutor?app=${encodeURIComponent(key)}`)} /></Shell>;
   if (route === '/tutor') return <Shell user={user} onLogout={logout} busy={busy}><Tutor user={user} onOpenMaterial={(id) => { setDetail(null); go(`/materials/${id}`); }} /></Shell>;
   if (route === '/mcp') return <Shell user={user} onLogout={logout} busy={busy}>{user.role === 'teacher' ? <MCPAdmin /> : <Status notice="请求的资源不存在。" />}</Shell>;
+  if (route === '/accounts') return <Shell user={user} onLogout={logout} busy={busy}>{user.role==='teacher'?<AccountInvitations/>:<Status notice="请求的资源不存在。"/>}</Shell>;
 
   if (route.startsWith('/materials/')) return <Shell user={user} onLogout={logout} busy={busy}>
     <button className="text-button" onClick={() => go('/materials')}>← 返回讲义列表</button><Status notice={notice} />
@@ -145,13 +152,13 @@ export function App() {
   </Shell>;
 
   return <Shell user={user} onLogout={logout} busy={busy}><section className="page-heading"><p className="eyebrow">{user.class_id === 1 ? 'A班' : user.class_id === 2 ? 'B班' : '我的班级'} · {user.role === 'teacher' ? '教师' : '学生'}</p><h1>课程讲义</h1><p className="muted">你只会看到自己班级的资料。</p></section><Status notice={notice} /><section className="search-card"><h2>在本班讲义中查找</h2><p className="muted">关键词检索只在本机数据库搜索；向量和混合检索会把你的问题发送给课程嵌入服务。</p><form onSubmit={search}><label>检索方式<select value={searchMode} onChange={(event) => setSearchMode(event.target.value as 'keyword' | 'vector' | 'hybrid')}><option value="keyword">关键词</option><option value="vector">语义向量</option><option value="hybrid">关键词 + 语义混合</option></select></label><label>输入课程问题或关键词<input value={query} onChange={(event) => setQuery(event.target.value)} maxLength={1000} required /></label><button disabled={busy || !query.trim()}>搜索讲义</button></form>{searchNotice && <p className="search-notice" role="status">{searchNotice}</p>}{searchHits && searchHits.length > 0 && <ol className="search-results">{searchHits.map((hit) => <li key={hit.chunk_id}><button className="material-link" onClick={() => { setDetail(null); go(`/materials/${hit.material_id}`); }}><strong>{hit.title} · 第{hit.chunk_index + 1}段</strong><span>原文字符位置 {hit.char_start}–{hit.char_end}{hit.source_locator ? ` · ${hit.source_locator}` : ''}</span></button><p>{preview(hit.excerpt)}</p>{hit.source_url && <a href={hit.source_url} target="_blank" rel="noreferrer">打开原始来源</a>}</li>)}</ol>}
-    <section className="ask-card"><h2>根据讲义回答</h2><p className="muted">点击提问后，系统先把问题交给课程嵌入服务检索；找到本班资料后，再把问题和最多4段资料交给课程对话服务。可能消耗额度。没有找到资料时，不会调用对话服务。</p><form onSubmit={ask}><label>你的问题<input value={askQuestion} onChange={(event) => setAskQuestion(event.target.value)} maxLength={1000} required /></label><button disabled={askBusy || !askQuestion.trim()}>{askBusy ? '正在检索并回答…' : '基于本班资料回答'}</button></form>{askNotice && <p className="search-notice" role="status">{askNotice}</p>}{askAnswer && <div className="answer"><h3>回答</h3><p>{askAnswer}</p>{askCitations.length > 0 && <><h3>出处</h3><ol className="citations">{askCitations.map((hit, index) => <li key={hit.chunk_id}><button className="material-link" onClick={() => { setDetail(null); go(`/materials/${hit.material_id}`); }}><strong>[{index + 1}] {hit.title} · 第{hit.chunk_index + 1}段</strong><span>原文字符位置 {hit.char_start}–{hit.char_end}{hit.source_locator ? ` · ${hit.source_locator}` : ''}</span></button><p>{preview(hit.excerpt)}</p></li>)}</ol></>}</div>}</section>
+    <section className="ask-card"><h2>根据讲义回答</h2><p className="muted">提问会先把问题交给课程嵌入服务检索，可能消耗额度；有命中时，最多按你选择的段数把资料交给课程对话服务。没有命中时不调用对话服务。默认只发送1段。</p><form onSubmit={ask}><label>本轮最多发送给课程对话服务的资料段数<select value={askMaxEvidenceChunks} onChange={(event) => setAskMaxEvidenceChunks(Number(event.target.value))}><option value={1}>1段（默认）</option><option value={2}>2段</option><option value={3}>3段</option><option value={4}>4段</option></select></label><label>你的问题<input value={askQuestion} onChange={(event) => setAskQuestion(event.target.value)} maxLength={1000} required /></label><button disabled={askBusy || !askQuestion.trim()}>{askBusy ? '正在检索并回答…' : '基于本班资料回答'}</button></form>{askNotice && <p className="search-notice" role="status">{askNotice}</p>}{askAnswer && <div className="answer"><h3>回答</h3><p>{askAnswer}</p>{askEvidenceCount !== null && <p className="muted">本轮实际交给课程对话服务的资料：{askEvidenceCount}段（上限{askEvidenceLimit}段）</p>}{askCitations.length > 0 && <><h3>出处</h3><ol className="citations">{askCitations.map((hit, index) => <li key={hit.chunk_id}><button className="material-link" onClick={() => { setDetail(null); go(`/materials/${hit.material_id}`); }}><strong>[{index + 1}] {hit.title} · 第{hit.chunk_index + 1}段</strong><span>原文字符位置 {hit.char_start}–{hit.char_end}{hit.source_locator ? ` · ${hit.source_locator}` : ''}</span></button><p>{preview(hit.excerpt)}</p></li>)}</ol></>}</div>}</section>
     </section><div className="layout">{user.role === 'teacher' && <section className="upload-card"><h2>上传讲义</h2><p className="muted">支持 UTF-8 的 .txt 和 .md，单个文件不超过 5 MiB。</p><form onSubmit={upload}><label>标题<input name="title" maxLength={200} required /></label><label>课程资料文件<input name="file" type="file" accept=".txt,.md,text/plain,text/markdown" required /></label><label>来源网址（可选）<input name="source_url" type="url" /></label><label>章节或位置（可选）<input name="source_locator" maxLength={200} /></label><button disabled={busy}>{busy ? '正在保存…' : '上传并保存'}</button></form></section>}
     <section className="list-card"><div className="list-title"><h2>本班资料</h2><button className="text-button" onClick={() => void loadList()}>刷新</button></div>{page ? page.items.length === 0 ? <p className="empty">暂无讲义</p> : <ul>{page.items.map((item) => <li key={item.id}><button className="material-link" onClick={() => { setDetail(null); go(`/materials/${item.id}`); }}><strong>{item.title}</strong><span>{item.original_filename} · {new Date(item.created_at).toLocaleString()}</span></button></li>)}</ul> : <p role="status">正在读取本班讲义…</p>}</section></div></Shell>;
 }
 
 function Shell({ children, user, onLogout, busy }: { children: ReactNode; user?: User; onLogout?: () => void; busy?: boolean }) {
-    return <main className="app"><header><a href="/apps" className="brand" onClick={(e) => { e.preventDefault(); window.history.pushState({}, '', '/apps'); window.dispatchEvent(new PopStateEvent('popstate')); }}>CampusClaw</a><span>软件开发课程学习平台</span>{user && <nav className="top-nav"><a href="/apps" onClick={(e)=>{e.preventDefault();window.history.pushState({},'','/apps');window.dispatchEvent(new PopStateEvent('popstate'));}}>应用</a><a href="/materials" onClick={(e)=>{e.preventDefault();window.history.pushState({},'','/materials');window.dispatchEvent(new PopStateEvent('popstate'));}}>讲义</a><a href="/tutor" onClick={(e)=>{e.preventDefault();window.history.pushState({},'','/tutor');window.dispatchEvent(new PopStateEvent('popstate'));}}>会话</a>{user.role==='teacher'&&<a href="/mcp" onClick={(e)=>{e.preventDefault();window.history.pushState({},'','/mcp');window.dispatchEvent(new PopStateEvent('popstate'));}}>工具接入</a>}</nav>}{user && <div className="account"><span>{user.username}</span><button className="text-button" disabled={busy} onClick={onLogout}>退出登录</button></div>}</header>{children}<footer>提供三个课程应用、本班资料出处和智能体流式问答。</footer></main>;
+    return <main className="app"><header><a href="/apps" className="brand" onClick={(e) => { e.preventDefault(); window.history.pushState({}, '', '/apps'); window.dispatchEvent(new PopStateEvent('popstate')); }}>CampusClaw</a><span>软件开发课程学习平台</span>{user && <nav className="top-nav"><a href="/apps" onClick={(e)=>{e.preventDefault();window.history.pushState({},'','/apps');window.dispatchEvent(new PopStateEvent('popstate'));}}>应用</a><a href="/materials" onClick={(e)=>{e.preventDefault();window.history.pushState({},'','/materials');window.dispatchEvent(new PopStateEvent('popstate'));}}>讲义</a><a href="/tutor" onClick={(e)=>{e.preventDefault();window.history.pushState({},'','/tutor');window.dispatchEvent(new PopStateEvent('popstate'));}}>会话</a>{user.role==='teacher'&&<><a href="/accounts" onClick={(e)=>{e.preventDefault();window.history.pushState({},'','/accounts');window.dispatchEvent(new PopStateEvent('popstate'));}}>账号管理</a><a href="/mcp" onClick={(e)=>{e.preventDefault();window.history.pushState({},'','/mcp');window.dispatchEvent(new PopStateEvent('popstate'));}}>工具接入</a></>}</nav>}{user && <div className="account"><span>{user.username}</span><button className="text-button" disabled={busy} onClick={onLogout}>退出登录</button></div>}</header>{children}<footer>提供三个课程应用、本班资料出处和智能体流式问答。</footer></main>;
 }
 
 function Status({ notice }: { notice: string }) { return notice ? <p className="notice" role="alert">{notice}</p> : null; }

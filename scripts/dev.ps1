@@ -74,7 +74,7 @@ switch ($Task) {
         if ($Task -eq 'test') {
             Push-Location (Join-Path $projectRoot 'frontend')
             try {
-                npm.cmd run test:sse
+                npm.cmd run test
                 if ($LASTEXITCODE -ne 0) { throw '前端SSE分段测试失败' }
             } finally { Pop-Location }
         }

@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1 --port 5173 --strictPort",
-    "build": "npm run test:sse && tsc --noEmit && vite build",
+    "build": "npm run test && tsc --noEmit && vite build",
+    "test": "npm run test:sse && node --experimental-strip-types --test test/skill-file.test.mjs test/tool-activity.test.mjs",
     "test:sse": "node --experimental-strip-types --test test/sse.test.mjs",
     "preview": "vite preview --host 127.0.0.1 --port 5173 --strictPort"
   },

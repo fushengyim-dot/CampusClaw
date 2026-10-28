@@ -35,8 +35,11 @@ var mcpToolsSchema string
 //go:embed migrations/007_mcp_server_presets.sql
 var mcpServerPresetsSchema string
 
+//go:embed migrations/008_account_invitations.sql
+var accountInvitationsSchema string
+
 var baseSchemaTables = []string{"classes", "users", "sessions", "materials", "knowledge_entries", "assignments", "tutor_agents", "skills"}
-var schemaTables = append(append([]string{}, baseSchemaTables...), "knowledge_chunks", "knowledge_vector_state", "course_agents", "course_skills", "course_agent_skills", "course_agent_materials", "conversations", "conversation_messages", "course_builtin_agents", "mcp_servers", "mcp_server_tools", "course_skill_tool_bindings", "mcp_tool_calls", "mcp_server_presets")
+var schemaTables = append(append([]string{}, baseSchemaTables...), "knowledge_chunks", "knowledge_vector_state", "course_agents", "course_skills", "course_agent_skills", "course_agent_materials", "conversations", "conversation_messages", "course_builtin_agents", "mcp_servers", "mcp_server_tools", "course_skill_tool_bindings", "mcp_tool_calls", "mcp_server_presets", "account_invitations")
 var ErrSchema = errors.New("数据表初始化未通过；请检查数据库可用性和结构版本，不要删除已有数据后重试")
 var ErrSchemaConflict = errors.New("数据表版本冲突或已完成结构缺失；已停止，不覆盖已有数据")
 
@@ -55,6 +58,7 @@ func schemaMigrations() []schemaMigration {
 		{version: 5, sql: builtinApplicationsSchema, tables: []string{"course_builtin_agents"}},
 		{version: 6, sql: mcpToolsSchema, tables: []string{"mcp_servers", "mcp_server_tools", "course_skill_tool_bindings", "mcp_tool_calls"}},
 		{version: 7, sql: mcpServerPresetsSchema, tables: []string{"mcp_server_presets"}},
+		{version: 8, sql: accountInvitationsSchema, tables: []string{"account_invitations"}},
 	}
 }
 

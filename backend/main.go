@@ -264,7 +264,7 @@ func run(ctx context.Context, getenv func(string) string, args []string, out, er
 			fmt.Fprintln(errOut, "对话服务配置不可用；资料检索仍可使用，AI问答暂不可用")
 		}
 	}
-	return serve(ctx, listener, handlers.NewApplicationWithLesson6(login, materialService, cfg.AppOrigin, knowledge, chat, lesson5, mcpRegistry), out, errOut)
+	return serve(ctx, listener, handlers.NewApplicationWithLesson6(login, materialService, cfg.AppOrigin, knowledge, chat, lesson5, mcpRegistry, services.NewRegistrationStore(db)), out, errOut)
 }
 
 func runMCPServer(ctx context.Context, getenv func(string) string, out, errOut io.Writer) int {

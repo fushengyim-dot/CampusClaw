@@ -35,6 +35,26 @@ func TestSearchIntegration(t *testing.T) {
 		t.Fatal("project database unavailable")
 	}
 	t.Cleanup(func() { _ = db.Close() })
+	var classAID int64
+	if err := db.QueryRowContext(ctx, `SELECT id FROM classes WHERE name='A班' ORDER BY id LIMIT 1`).Scan(&classAID); err != nil || classAID < 1 {
+		t.Fatal("class A unavailable for classroom material acceptance")
+	}
+	var targetMaterialID int64
+	var targetTitle, sourceURL, sourceLocator string
+	var entries, contentRunes, chunks, readyChunks, vectorReadyChunks int
+	err = db.QueryRowContext(ctx, `SELECT m.id,m.title,COALESCE(m.source_url,''),COALESCE(m.source_locator,''),
+		COUNT(DISTINCT e.id),COALESCE(MAX(CHAR_LENGTH(e.content)),0),COUNT(DISTINCT c.id),
+		COUNT(DISTINCT CASE WHEN c.index_status='ready' THEN c.id END),
+		COUNT(DISTINCT CASE WHEN v.status='ready' THEN c.id END)
+		FROM materials m
+		LEFT JOIN knowledge_entries e ON e.material_id=m.id AND e.class_id=m.class_id
+		LEFT JOIN knowledge_chunks c ON c.knowledge_entry_id=e.id
+		LEFT JOIN knowledge_vector_state v ON v.chunk_id=c.id
+		WHERE m.class_id=? AND m.original_filename='lesson-03-auth-class-scope.md' AND m.title LIKE '%来源核对版%'
+		GROUP BY m.id,m.title,m.source_url,m.source_locator ORDER BY m.id LIMIT 1`, classAID).Scan(&targetMaterialID, &targetTitle, &sourceURL, &sourceLocator, &entries, &contentRunes, &chunks, &readyChunks, &vectorReadyChunks)
+	if err != nil || targetMaterialID < 1 || entries != 1 || contentRunes == 0 || chunks == 0 || readyChunks == 0 || sourceURL == "" || sourceLocator == "" {
+		t.Fatal("source-verified classroom material, saved text, ready chunks, or traceable source metadata was missing before recovery")
+	}
 	removeAbortedVectorIndexFixtures(t, ctx, db)
 	materialService, err := services.NewMaterials(db, os.Getenv("UPLOAD_ROOT"))
 	if err != nil || materialService.Recover(ctx) != nil {
@@ -78,7 +98,7 @@ func TestSearchIntegration(t *testing.T) {
 	type result struct {
 		Items []services.KnowledgeHit `json:"items"`
 	}
-	search := func(username, password string, claimedClass int64) result {
+	search := func(username, password string, claimedClass int64, query string) result {
 		t.Helper()
 		if password == "" {
 			t.Fatal("test user credential was not loaded into the isolated check container")
@@ -87,7 +107,7 @@ func TestSearchIntegration(t *testing.T) {
 		if err != nil {
 			t.Fatalf("test user could not log in: %v", err)
 		}
-		payload, _ := json.Marshal(map[string]any{"q": "小组", "mode": "keyword", "class_id": claimedClass})
+		payload, _ := json.Marshal(map[string]any{"q": query, "mode": "keyword", "class_id": claimedClass})
 		req, _ := http.NewRequestWithContext(ctx, http.MethodPost, server.URL+"/api/search", bytes.NewReader(payload))
 		req.Header.Set("Content-Type", "application/json")
 		req.AddCookie(&http.Cookie{Name: "campusclaw_session", Value: token})
@@ -113,15 +133,61 @@ func TestSearchIntegration(t *testing.T) {
 		logoutResponse.Body.Close()
 		return body
 	}
-	a := search(usernameA, password, 2)
-	if len(a.Items) == 0 || a.Items[0].MaterialID <= 0 || a.Items[0].Title == "" || a.Items[0].Excerpt == "" {
-		t.Fatal("A-class keyword result or traceable source was missing")
+	a := search(usernameA, password, 2, "授权")
+	var targetFound bool
+	for _, hit := range a.Items {
+		if hit.MaterialID == targetMaterialID && hit.Title == targetTitle && hit.Excerpt != "" && hit.SourceURL != nil && *hit.SourceURL == sourceURL && hit.SourceLocator != nil && *hit.SourceLocator == sourceLocator {
+			targetFound = true
+			break
+		}
 	}
-	b := search(usernameB, password, 1)
-	if len(b.Items) != 0 {
-		t.Fatal("B-class session received a keyword result from A-class source material")
+	if !targetFound {
+		t.Fatal("authenticated A-class keyword retrieval did not return the source-verified classroom material with its traceable citation")
 	}
-	t.Log("CHECK: real teacher/student sessions searched with MySQL ngram; forged class_id ignored; A/B source isolation and citations confirmed")
+	b := search(usernameB, password, 1, "授权")
+	for _, hit := range b.Items {
+		if hit.MaterialID == targetMaterialID {
+			t.Fatal("B-class session received the A-class classroom material despite a forged class_id")
+		}
+	}
+	qdrant, err := services.NewQdrant(os.Getenv("QDRANT_URL"))
+	if err != nil {
+		t.Fatal("local Qdrant was not available for the bound-material hybrid check")
+	}
+	queryVector := make([]float32, 2048)
+	queryVector[0] = 1
+	boundSearch := services.NewKnowledgeWithVector(db, qdrant, services.QueryEmbedderFunc(func(context.Context, string) ([]float32, error) {
+		return queryVector, nil
+	}), "campusclaw_chunks", 2048)
+	var lectureAgentID int64
+	if err := db.QueryRowContext(ctx, `SELECT agent_id FROM course_builtin_agents WHERE class_id=? AND builtin_key='lecture'`, classAID).Scan(&lectureAgentID); err != nil {
+		t.Fatal("lecture assistant unavailable for persisted binding acceptance")
+	}
+	savedConfig, err := services.NewLesson5Store(db).ReadAgentConfig(ctx, classAID, lectureAgentID)
+	if err != nil || len(savedConfig.MaterialIDs) != 1 || savedConfig.MaterialIDs[0] != targetMaterialID {
+		t.Fatal("lecture assistant must have exactly the source-verified classroom material saved before bound retrieval acceptance")
+	}
+	boundHits, err := boundSearch.SearchHybridMaterials(ctx, classAID, "授权", savedConfig.MaterialIDs, 4)
+	if err != nil {
+		t.Fatal("local bound-material hybrid retrieval failed")
+	}
+	var boundTargetFound bool
+	for _, hit := range boundHits {
+		if hit.MaterialID != targetMaterialID {
+			t.Fatal("hybrid retrieval escaped the assistant material allow-list")
+		}
+		if hit.Title == targetTitle && hit.Excerpt != "" && hit.SourceURL != nil && *hit.SourceURL == sourceURL && hit.SourceLocator != nil && *hit.SourceLocator == sourceLocator {
+			boundTargetFound = true
+		}
+	}
+	if !boundTargetFound {
+		t.Fatal("hybrid retrieval with the selected material allow-list did not return the traceable classroom source")
+	}
+	crossClassHits, err := boundSearch.SearchHybridMaterials(ctx, 2, "授权", savedConfig.MaterialIDs, 4)
+	if err != nil || len(crossClassHits) != 0 {
+		t.Fatal("hybrid retrieval exposed the A-class material through a B-class session")
+	}
+	t.Logf("CHECK: A-class material ID %d had one saved text row, %d ready keyword chunks, and %d vector-ready chunks before recovery; assistant %d persisted exactly that binding; authenticated keyword and saved-binding hybrid retrieval returned only its cited source; forged class_id and B-class scope did not expose it", targetMaterialID, readyChunks, vectorReadyChunks, lectureAgentID)
 }
 
 func removeAbortedVectorIndexFixtures(t *testing.T, ctx context.Context, db *sql.DB) {
@@ -195,7 +261,7 @@ func TestVectorSearchIntegration(t *testing.T) {
 	}
 	t.Cleanup(func() {
 		if err := qdrant.DeleteCollection(context.Background(), collection); err != nil {
-			t.Error("isolated Qdrant collection cleanup failed")
+			t.Errorf("isolated Qdrant collection cleanup failed: %v", err)
 		}
 	})
 	tag := "vector-index-check-" + strconv.FormatInt(time.Now().UTC().UnixNano(), 10)
@@ -287,5 +353,5 @@ func TestVectorSearchIntegration(t *testing.T) {
 	if err != nil || len(hits) != 1 || hits[0].ChunkID != chunkID || hits[0].Excerpt == "" || hits[0].Score < 0.99 {
 		t.Fatal("class A vector retrieval did not return a traceable MySQL source")
 	}
-	t.Log("CHECK: synthetic embedding searched local Qdrant; MySQL rechecked class scope and returned only traceable source text; temporary collection removed")
+	t.Log("CHECK: synthetic embedding searched local Qdrant; MySQL rechecked class scope and returned only traceable source text; temporary collection cleanup is checked at test end")
 }
