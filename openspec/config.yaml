@@ -5,10 +5,10 @@ context: |
   All artifacts must be written in zh-CN.
   Keep OpenSpec structural headings and SHALL/MUST keywords in English.
   CampusClaw serves teachers and students of the software development course.
-  Current stage is lesson 02: specification documents only, no business code.
+  Current active change is lesson 06: MCP tool integration, server registration, discovery, skill binding, bounded calls and audit. Lesson 04 remains not finally accepted because one real-material request exceeded its authorized evidence count; preserve that record and make no model requests.
   Planned first-round stack is React/TypeScript, Go, MySQL, Nginx and Docker Compose.
-  Current change covers login, teacher/student authorization, class isolation and text-material ingestion.
-  Follow README.md and AGENTS.md. All implementation tasks stay unchecked until lesson 03.
+  Lesson-05 code and local simulated/service acceptance are complete; peer cross-checking remains unverified and the real-material lesson-04 failure remains unchanged. The active lesson-06 change covers the self-hosted MCP HTTP server, class-scoped registry, encrypted tokens, discovery snapshots, skill tool bindings, bounded orchestration, audit and ordered SSE. The official lesson-06 tutorial was retrieved on 2026-10-28; do not call external models or unknown external MCP servers during this task.
+  Follow README.md, AGENTS.md and parent TASK_BOARD.md T-002.20. Check tasks only after their actual acceptance evidence exists.
 
 # Per-artifact rules (optional)
 # Add custom rules for specific artifacts.

@@ -1,0 +1,2 @@
+# Keep embedded migration fingerprints identical across Windows/Linux checkouts.
+backend/database/migrations/*.sql text eol=lf

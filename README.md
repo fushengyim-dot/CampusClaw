@@ -1,86 +1,74 @@
-# CampusClaw：软件开发课程学习平台
+# CampusClaw 课程学习平台
 
-- **价值：**让本门软件开发课程的学生在本班资料范围内学习概念、理解实操和整理知识，并能核对回答出处。
-- **核心场景：**教师上传课程资料；学生使用讲义问答、解题引导、复习整理三个应用。第一轮先完成登录、权限、班级隔离与讲义上传保存。
-- **本期不做：**第 7 课及以后的完整作业、批改、成绩、异步队列等流程；第一轮另外不做检索、AI 对话、提示词模板、技能运行和 MCP，这些在第 4—6 课逐步加入。
+CampusClaw 是本门软件开发课程的本地学习平台。教师和学生使用各自账号登录；页面只显示本班讲义。教师可上传 UTF-8 的 TXT 或 Markdown 文件，班级成员可查看正文并下载原文件。
 
-## 当前阶段
+## 当前实现
 
-当前仅有第 2 课的项目说明与规约，没有业务代码，不能启动网站。本轮规约等待用户确认，第 3 课才按清单实现。
+- 登录、退出和服务端会话已接通；会话固定 8 小时，角色与班级由服务端账号记录决定。
+- A、B 两班各有一位教师和一位学生。学生只能查看和下载本班材料。
+- 教师可上传 `.txt`、`.md` 文件；单个文件最多 5 MiB，上传请求最多 6 MiB。
+- 数据库同时保存讲义信息和正文；原文件存放在本项目的 F 盘目录。程序启动时校验文件与数据库一致，并补入缺少的课程验收样例。重复启动不会复制样例或重置已有密码/讲义。
+- 上传、正文详情和下载都经过服务端权限检查。第4课已实现关键词、向量和混合检索、讲义出处、教师手动向量化入口，以及有检索依据才回答的问答页面。讲义不会在上传时自动发送；教师每次手动启动最多处理10段。问答会把问题发送到课程嵌入服务，找到本班资料后还会把问题和最多4段资料发送到课程对话服务。
+- 第5课本机实现已完成：本机页面已显示讲义问答、解题引导、复习整理三个入口；教师可看到本班智能体和两份样板技能；学生提问模板与教师角色提示分开保存。会话流式接口、OpenAPI与Swagger已经接入。Go单元测试使用离线stub检查了分段事件、无资料时不显示伪造引用、资料学科筛选和中途失败时保存已生成内容；这些检查没有发送课程模型请求，也不等于真实模型验收。浏览器端的学生真实提问、逐段显示和同伴交叉检查仍待完成。
+- 第6课本机功能已实现：独立MCP服务提供两个只读课程工具；教师可在“工具接入”页连接本班内置服务、发现工具、管理技能绑定并查看安全摘要调用记录。服务仅允许项目内置地址，令牌在数据库中加密保存；工具参数在服务端再次检查，调用轮数、次数和时限均有限制。Go/前端自动检查、数据库集成检查、Compose配置、本地容器健康和教师页面工具发现均已核验。第6课验收记录见 [`docs/lesson-05-06/internal/ACCEPTANCE-06.md`](docs/lesson-05-06/internal/ACCEPTANCE-06.md)。没有发起课程模型请求，因此真实网关对结构化工具调用的兼容性仍待验证；第5课学生页面和同伴检查、第4课材料范围失败记录仍保留。
 
-本项目是当前目录下独立的新仓库，不是旧的 `F:\CampusClaw`，不读取或迁移旧数据库、凭据或运行状态。
+## 本机启动
 
-## 本期五项功能
+需要 Docker Desktop、PowerShell、Node.js/npm，以及本项目固定使用的 Go 工具。数据库和上传文件都留在本项目 F 盘 `runtime/`；不要移动或删除这些目录。Docker 镜像沿用电脑现有 Docker 存储。
 
-1. 多个内置 AI 应用：讲义问答、解题引导、复习整理。
-2. 可选择并填写的提示词模板。
-3. 本班知识库检索与真实资料出处。
-4. 内置技能及上传技能，支持校验、绑定与启停。
-5. 外部工具及 MCP 接入。
-
-这些是第 1—6 课整期目标，不表示本次变更已经实现。教材来源为老师这门课的网页、课件和实操教程；数据准备由助手负责转换、核对来源，第一轮上传只接收 UTF-8 `.txt`、`.md`。
-
-## 这次先读哪些文件
-
-变更名称：`add-auth-rbac-class-knowledge`。
-
-| 文件 | 通俗解释 |
-| --- | --- |
-| `openspec/changes/add-auth-rbac-class-knowledge/proposal.md` | 本轮为什么做，做哪些，不做哪些 |
-| `openspec/changes/add-auth-rbac-class-knowledge/design.md` | 页面、后端、数据库怎样配合，为什么这样设计 |
-| `openspec/changes/add-auth-rbac-class-knowledge/specs/auth-upload/spec.md` | 一条条能判断通过或失败的要求 |
-| `openspec/changes/add-auth-rbac-class-knowledge/tasks.md` | 第 3 课按什么顺序实现，每步怎样检查 |
-| `AGENTS.md` | 开发者和 AI 助手在本仓库必须遵守的规则 |
-| `docs/lesson-02/internal/REVIEW.md` | 来源对照、文档检查和未完成事项，属于内部备注 |
-
-`openspec/specs/` 目前没有已归档能力；本变更仍在 `changes/` 中，不能把规划当成已实现的系统。
-
-## 第一轮准备采用的技术组合
-
-React + TypeScript 前端、Go 后端、MySQL 数据库、Nginx 单入口、Docker Compose 本地启动。
-
-登录采用服务端会话：浏览器 Cookie 只保存随机会话标识，身份与班级从服务端取得。学生上传返回 403；跨班访问与不存在的材料统一返回同样的 404 响应。第 5 课的 Bearer 令牌要求在后续变更中单独处理。
-
-## 现在怎样检查规约
-
-在本项目根目录运行：
+在项目根目录运行：
 
 ```powershell
+./scripts/database.ps1 -Task prepare
+./scripts/database.ps1 -Task prepare-accounts
+./scripts/database.ps1 -Task up
+```
+
+第4课课程网关配置使用项目根目录的 `.env`：新克隆项目时先复制 `.env.example` 为 `.env`，再填写课程页面提供的地址、密钥、模型名和维度。本机已有 `.env` 骨架时，在 Trae 中打开它并把密钥粘到 `EMBEDDING_API_KEY=` 后面。`.env` 已被 Git 忽略，且不会打进镜像。Docker Compose 会从项目根目录读取它，并只把模型配置传给 API 容器；Go 程序本身不解析 `.env`。密钥不要写进源码、普通文档或聊天。`test-embedding` 每次运行会向课程网关发送一条自拟短句；`test-chat` 每次运行会发送一条自拟问题和一段合成资料。两种命令都是真实模型请求，可能计入额度，不会自动重试；再次运行前应先考虑额度。
+
+首次启动前两条命令会创建缺少的本地秘密文件和四份随机演示账号密码；重复执行不会覆盖现有文件。密码保存在 `runtime/private/`，不应复制到聊天、日志或普通文档。`up` 会构建前后端并启动本项目的数据库、API 和网页；只有网页发布到本机 `127.0.0.1:8080`，数据库与 API 不对宿主机开放端口。
+
+浏览器访问 [http://127.0.0.1:8080](http://127.0.0.1:8080)。账号名为 `teacher_a`、`student_a1`、`teacher_b`、`student_b1`；对应密码由首次准备时写入本地秘密目录。健康检查地址为 [http://127.0.0.1:8080/health](http://127.0.0.1:8080/health)，服务完全就绪返回 `{"status":"ok"}`。
+
+停止服务但保留数据：
+
+```powershell
+./scripts/database.ps1 -Task stop
+```
+
+再次执行 `up` 会用同一份数据库和上传文件。普通停止或容器重建不会清空这些数据；不要用删除卷/数据目录的命令来“重置”。
+
+## 检查命令
+
+```powershell
+./scripts/dev.ps1 -Task test
+./scripts/dev.ps1 -Task build
+./scripts/dev.ps1 -Task build-linux
+./scripts/database.ps1 -Task test-materials
+./scripts/database.ps1 -Task test-chat
 openspec validate add-auth-rbac-class-knowledge --strict --no-interactive
 ```
 
-这条命令检查文档结构，不会证明登录、上传、权限或部署已经工作。运行结果见内部备注。
+`test-chat` 是一次性的真实网关连通检查，不是离线单元测试；只有确认可以消耗额度时才运行。它不会显示模型回答。
 
-## 第 3 课完成后的启动约定
+`test-materials` 会在当前项目数据库中建立带专用前缀的临时测试班级和材料，验证事务、5 MiB 边界、未知提交与恢复；结束时只清理由该测试创建的记录和文件。运行证据和当前限制见 [`docs/lesson-03/internal/MATERIALS.md`](docs/lesson-03/internal/MATERIALS.md)。
 
-以下是未来实现必须提供的使用方法，当前尚不可执行：
+## 课程资料与范围
 
-1. 根据届时提供的 `.env.example` 在本机填写配置；示例只列变量名，不提供真实密码。
-2. 执行 `docker compose up --build -d`，启动 `web`、`api`、`db`。
-3. 访问配置的本机入口 `/login` 登录，访问 `/health` 查看服务是否就绪。
-4. Compose 初始化数据库和验收账号；重复启动不得覆盖已有讲义或重置密码。
+虚构样例明确标注为验收用途。课程范围整理稿根据[课程第3课公开教程](https://devops.hello1023.com/课件/第3课-课件-认证授权与知识库入库/pages/scope.html)核对，并保留来源网址与章节位置。第4课已实现三类切片策略、MySQL中文关键词检索、Qdrant向量检索、RRF混合排序、向量状态与正文变化检查、来源引用和证据门控问答。合成向量的MySQL/Qdrant隔离集成检查通过。课程网关短句连接和合成对话都通过；另有一次经授权的真实材料问答尝试，但对话请求实际带了3条检索资料，而授权范围只有1条，因此该真实闭环验收失败。具体记录见`docs/lesson-04/internal/GATEWAY_CONFIG.md`；目前没有追加请求。向量/混合搜索和问答会向课程服务发送问题或讲义内容，可能消耗额度。老师指向的第4课原始OpenSpec文件尚未取得，整课也未最终验收。
 
-最终入口端口在第 3 课检查本机占用后通过配置确定。数据库与后端不直接向宿主机开放端口，上传目录不作为公开静态目录。
+## 目录入口
 
-普通 `docker compose down` 再 `up` 应保留命名数据卷中的资料。这个保证以使用同一项目和同一数据卷、没有删除数据卷为前提；不得用 `down -v` 验证资料保留。
-
-## 当前目录
-
-```text
-CampusClaw/
-├─ AGENTS.md
-├─ README.md
-├─ .gitignore
-├─ openspec/
-│  ├─ config.yaml
-│  ├─ specs/                         # 实现验收并归档后才进入这里
-│  └─ changes/
-│     └─ add-auth-rbac-class-knowledge/
-│        ├─ proposal.md
-│        ├─ design.md
-│        ├─ tasks.md
-│        └─ specs/auth-upload/spec.md
-└─ docs/lesson-02/internal/           # 来源与检查记录
-```
-
-后续代码目录按 design.md 建立，本轮不创建空业务文件冒充实现。
+- [`frontend/src/App.tsx`](frontend/src/App.tsx)：登录、材料列表、详情、上传、三种检索方式、手动向量化和出处问答页面。
+- [`backend/handlers/application.go`](backend/handlers/application.go)：HTTP 接口和就绪状态优先检查。
+- [`backend/services/materials.go`](backend/services/materials.go)：班级查询、上传事务、文件校验和恢复。
+- [`backend/services/chunking.go`](backend/services/chunking.go)：自动、自定义和 Markdown 标题分块。
+- [`backend/services/knowledge.go`](backend/services/knowledge.go)：切片补建、关键词/向量/混合检索及手动向量索引状态。
+- [`backend/services/chat.go`](backend/services/chat.go)：服务端课程对话网关；真实问答只会在用户提交问题且找到本班资料后触发。
+- [`backend/handlers/lesson5.go`](backend/handlers/lesson5.go)：教师/学生智能体与技能接口、本人会话权限和SSE流式应答。
+- [`backend/handlers/openapi.go`](backend/handlers/openapi.go)：接口说明JSON及Swagger页面。
+- [`backend/mcpserver/server.go`](backend/mcpserver/server.go)：独立MCP HTTP服务、认证、健康检查及本地只读课程工具。
+- [`backend/services/mcp_orchestrator.go`](backend/services/mcp_orchestrator.go)：仅使用技能当前绑定工具的受限调用循环；自动检查使用本地stub，不触发外部模型请求。
+- [`compose.yaml`](compose.yaml)：本项目 web/api/db 服务、网络与 F 盘挂载。
+- [`openspec/changes/add-auth-rbac-class-knowledge/tasks.md`](openspec/changes/add-auth-rbac-class-knowledge/tasks.md)：第3课要求和逐项验收状态。
+- [`TASK_BOARD.md`](../TASK_BOARD.md)：整个课程项目的总任务状态。

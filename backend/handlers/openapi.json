@@ -1,0 +1,845 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "description": "从Go处理器注解生成的接口清单。所有业务接口使用HttpOnly登录Cookie。",
+    "title": "CampusClaw API",
+    "version": "0.5.0"
+  },
+  "paths": {
+    "/api/agents": {
+      "get": {
+        "summary": "List available class agents",
+        "responses": {
+          "200": {
+            "description": "请求成功"
+          },
+          "400": {
+            "description": "输入无效"
+          },
+          "401": {
+            "description": "未登录"
+          },
+          "403": {
+            "description": "权限不足"
+          },
+          "404": {
+            "description": "资源不存在"
+          },
+          "503": {
+            "description": "服务暂不可用"
+          }
+        }
+      },
+      "post": {
+        "summary": "Create a class agent and its bindings",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "请求成功"
+          },
+          "400": {
+            "description": "输入无效"
+          },
+          "401": {
+            "description": "未登录"
+          },
+          "403": {
+            "description": "权限不足"
+          },
+          "404": {
+            "description": "资源不存在"
+          },
+          "503": {
+            "description": "服务暂不可用"
+          }
+        }
+      }
+    },
+    "/api/agents/{id}": {
+      "get": {
+        "summary": "Read one class agent",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "请求成功"
+          },
+          "400": {
+            "description": "输入无效"
+          },
+          "401": {
+            "description": "未登录"
+          },
+          "403": {
+            "description": "权限不足"
+          },
+          "404": {
+            "description": "资源不存在"
+          },
+          "503": {
+            "description": "服务暂不可用"
+          }
+        }
+      },
+      "put": {
+        "summary": "Update a class agent and its bindings",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "请求成功"
+          },
+          "400": {
+            "description": "输入无效"
+          },
+          "401": {
+            "description": "未登录"
+          },
+          "403": {
+            "description": "权限不足"
+          },
+          "404": {
+            "description": "资源不存在"
+          },
+          "503": {
+            "description": "服务暂不可用"
+          }
+        }
+      }
+    },
+    "/api/apps": {
+      "get": {
+        "summary": "List the three built-in learning applications",
+        "responses": {
+          "200": {
+            "description": "请求成功"
+          },
+          "400": {
+            "description": "输入无效"
+          },
+          "401": {
+            "description": "未登录"
+          },
+          "403": {
+            "description": "权限不足"
+          },
+          "404": {
+            "description": "资源不存在"
+          },
+          "503": {
+            "description": "服务暂不可用"
+          }
+        }
+      }
+    },
+    "/api/conversations": {
+      "get": {
+        "summary": "List conversations owned by the current user",
+        "responses": {
+          "200": {
+            "description": "请求成功"
+          },
+          "400": {
+            "description": "输入无效"
+          },
+          "401": {
+            "description": "未登录"
+          },
+          "403": {
+            "description": "权限不足"
+          },
+          "404": {
+            "description": "资源不存在"
+          },
+          "503": {
+            "description": "服务暂不可用"
+          }
+        }
+      },
+      "post": {
+        "summary": "Create a conversation locked to one agent",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "请求成功"
+          },
+          "400": {
+            "description": "输入无效"
+          },
+          "401": {
+            "description": "未登录"
+          },
+          "403": {
+            "description": "权限不足"
+          },
+          "404": {
+            "description": "资源不存在"
+          },
+          "503": {
+            "description": "服务暂不可用"
+          }
+        }
+      }
+    },
+    "/api/conversations/{id}": {
+      "get": {
+        "summary": "Read an owned conversation and messages",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "请求成功"
+          },
+          "400": {
+            "description": "输入无效"
+          },
+          "401": {
+            "description": "未登录"
+          },
+          "403": {
+            "description": "权限不足"
+          },
+          "404": {
+            "description": "资源不存在"
+          },
+          "503": {
+            "description": "服务暂不可用"
+          }
+        }
+      }
+    },
+    "/api/conversations/{id}/messages": {
+      "post": {
+        "summary": "Stream one answer using SSE",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "请求成功"
+          },
+          "400": {
+            "description": "输入无效"
+          },
+          "401": {
+            "description": "未登录"
+          },
+          "403": {
+            "description": "权限不足"
+          },
+          "404": {
+            "description": "资源不存在"
+          },
+          "503": {
+            "description": "服务暂不可用"
+          }
+        }
+      }
+    },
+    "/api/mcp/calls": {
+      "get": {
+        "summary": "List recent tool calls for the current user or the teacher's class.",
+        "responses": {
+          "200": {
+            "description": "请求成功"
+          },
+          "400": {
+            "description": "输入无效"
+          },
+          "401": {
+            "description": "未登录"
+          },
+          "403": {
+            "description": "权限不足"
+          },
+          "404": {
+            "description": "资源不存在"
+          },
+          "503": {
+            "description": "服务暂不可用"
+          }
+        }
+      }
+    },
+    "/api/mcp/servers": {
+      "get": {
+        "summary": "List MCP servers in the teacher's class; tokens are never returned.",
+        "responses": {
+          "200": {
+            "description": "请求成功"
+          },
+          "400": {
+            "description": "输入无效"
+          },
+          "401": {
+            "description": "未登录"
+          },
+          "403": {
+            "description": "权限不足"
+          },
+          "404": {
+            "description": "资源不存在"
+          },
+          "503": {
+            "description": "服务暂不可用"
+          }
+        }
+      },
+      "post": {
+        "summary": "Register a class-scoped MCP server with an encrypted bearer token.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "请求成功"
+          },
+          "400": {
+            "description": "输入无效"
+          },
+          "401": {
+            "description": "未登录"
+          },
+          "403": {
+            "description": "权限不足"
+          },
+          "404": {
+            "description": "资源不存在"
+          },
+          "503": {
+            "description": "服务暂不可用"
+          }
+        }
+      }
+    },
+    "/api/mcp/servers/{id}": {
+      "delete": {
+        "summary": "Delete a class-scoped MCP server.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "请求成功"
+          },
+          "400": {
+            "description": "输入无效"
+          },
+          "401": {
+            "description": "未登录"
+          },
+          "403": {
+            "description": "权限不足"
+          },
+          "404": {
+            "description": "资源不存在"
+          },
+          "503": {
+            "description": "服务暂不可用"
+          }
+        }
+      },
+      "put": {
+        "summary": "Update a class-scoped MCP server.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "请求成功"
+          },
+          "400": {
+            "description": "输入无效"
+          },
+          "401": {
+            "description": "未登录"
+          },
+          "403": {
+            "description": "权限不足"
+          },
+          "404": {
+            "description": "资源不存在"
+          },
+          "503": {
+            "description": "服务暂不可用"
+          }
+        }
+      }
+    },
+    "/api/mcp/servers/{id}/connect": {
+      "post": {
+        "summary": "Connect and replace the discovered tool snapshot.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "请求成功"
+          },
+          "400": {
+            "description": "输入无效"
+          },
+          "401": {
+            "description": "未登录"
+          },
+          "403": {
+            "description": "权限不足"
+          },
+          "404": {
+            "description": "资源不存在"
+          },
+          "503": {
+            "description": "服务暂不可用"
+          }
+        }
+      }
+    },
+    "/api/mcp/servers/{id}/disconnect": {
+      "post": {
+        "summary": "Disconnect and clear the discovered tool snapshot.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "请求成功"
+          },
+          "400": {
+            "description": "输入无效"
+          },
+          "401": {
+            "description": "未登录"
+          },
+          "403": {
+            "description": "权限不足"
+          },
+          "404": {
+            "description": "资源不存在"
+          },
+          "503": {
+            "description": "服务暂不可用"
+          }
+        }
+      }
+    },
+    "/api/skills": {
+      "get": {
+        "summary": "List class skills",
+        "responses": {
+          "200": {
+            "description": "请求成功"
+          },
+          "400": {
+            "description": "输入无效"
+          },
+          "401": {
+            "description": "未登录"
+          },
+          "403": {
+            "description": "权限不足"
+          },
+          "404": {
+            "description": "资源不存在"
+          },
+          "503": {
+            "description": "服务暂不可用"
+          }
+        }
+      },
+      "post": {
+        "summary": "Create a skill from its text file",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "请求成功"
+          },
+          "400": {
+            "description": "输入无效"
+          },
+          "401": {
+            "description": "未登录"
+          },
+          "403": {
+            "description": "权限不足"
+          },
+          "404": {
+            "description": "资源不存在"
+          },
+          "503": {
+            "description": "服务暂不可用"
+          }
+        }
+      }
+    },
+    "/api/skills/{id}": {
+      "delete": {
+        "summary": "Delete a class skill",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "请求成功"
+          },
+          "400": {
+            "description": "输入无效"
+          },
+          "401": {
+            "description": "未登录"
+          },
+          "403": {
+            "description": "权限不足"
+          },
+          "404": {
+            "description": "资源不存在"
+          },
+          "503": {
+            "description": "服务暂不可用"
+          }
+        }
+      },
+      "get": {
+        "summary": "Read a skill file for its owner class",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "请求成功"
+          },
+          "400": {
+            "description": "输入无效"
+          },
+          "401": {
+            "description": "未登录"
+          },
+          "403": {
+            "description": "权限不足"
+          },
+          "404": {
+            "description": "资源不存在"
+          },
+          "503": {
+            "description": "服务暂不可用"
+          }
+        }
+      },
+      "put": {
+        "summary": "Update a class skill",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "请求成功"
+          },
+          "400": {
+            "description": "输入无效"
+          },
+          "401": {
+            "description": "未登录"
+          },
+          "403": {
+            "description": "权限不足"
+          },
+          "404": {
+            "description": "资源不存在"
+          },
+          "503": {
+            "description": "服务暂不可用"
+          }
+        }
+      }
+    },
+    "/api/skills/{id}/mcp-tools": {
+      "get": {
+        "summary": "Read saved references in the teacher's class.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "请求成功"
+          },
+          "400": {
+            "description": "输入无效"
+          },
+          "401": {
+            "description": "未登录"
+          },
+          "403": {
+            "description": "权限不足"
+          },
+          "404": {
+            "description": "资源不存在"
+          },
+          "503": {
+            "description": "服务暂不可用"
+          }
+        }
+      },
+      "put": {
+        "summary": "Bind only tools in the latest connected discovery snapshot.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "请求成功"
+          },
+          "400": {
+            "description": "输入无效"
+          },
+          "401": {
+            "description": "未登录"
+          },
+          "403": {
+            "description": "权限不足"
+          },
+          "404": {
+            "description": "资源不存在"
+          },
+          "503": {
+            "description": "服务暂不可用"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "sessionCookie": {
+        "in": "cookie",
+        "name": "campusclaw_session",
+        "type": "apiKey"
+      }
+    }
+  },
+  "security": [
+    {
+      "sessionCookie": []
+    }
+  ]
+}

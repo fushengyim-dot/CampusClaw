@@ -1,0 +1,198 @@
+name: campusclaw-course
+
+services:
+  mcp-tools:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    entrypoint: ["/usr/local/bin/campusclaw", "mcp-server"]
+    environment:
+      API_PORT: "8091"
+      MCP_SERVER_LISTEN_HOST: 0.0.0.0
+      MCP_SERVER_PORT: "8091"
+      MCP_SERVER_TOKEN_FILE: /run/secrets/mcp_tools_token
+    volumes:
+      - type: bind
+        source: ${CAMPUSCLAW_DOCKER_ROOT:-/run/desktop/mnt/host/campusclaw-course}/runtime/private/mcp_tools_token
+        target: /run/secrets/mcp_tools_token
+        read_only: true
+        bind: { create_host_path: false }
+    read_only: true
+    tmpfs: ["/tmp:size=4m,noexec,nosuid"]
+    security_opt: [no-new-privileges:true]
+    networks: [backend]
+
+  qdrant:
+    image: qdrant/qdrant:v1.20.0@sha256:9bfc89f9914fc14876a88c05270685921a55b8877b254a98bcc1cc2f0a424cd2
+    volumes:
+      - type: bind
+        source: ${CAMPUSCLAW_DOCKER_ROOT:-/run/desktop/mnt/host/campusclaw-course}/runtime/qdrant-data
+        target: /qdrant/storage
+        bind: { create_host_path: false }
+    networks: [backend]
+
+  db:
+    image: mysql:8.4@sha256:76f0358884cb92d9a086d24e5671c38048d3fef40f2588703d73eb55392d6b69
+    environment:
+      MYSQL_DATABASE: campusclaw_course
+      MYSQL_USER: campusclaw
+      MYSQL_ROOT_HOST: localhost
+      MYSQL_PASSWORD_FILE: /run/secrets/mysql_password
+      MYSQL_ROOT_PASSWORD_FILE: /run/secrets/mysql_root_password
+    volumes:
+      - type: bind
+        source: ${CAMPUSCLAW_DOCKER_ROOT:-/run/desktop/mnt/host/campusclaw-course}/runtime/mysql-data
+        target: /var/lib/mysql
+        bind: { create_host_path: false }
+      - type: bind
+        source: ${CAMPUSCLAW_DOCKER_ROOT:-/run/desktop/mnt/host/campusclaw-course}/runtime/private/mysql_password
+        target: /run/secrets/mysql_password
+        read_only: true
+        bind: { create_host_path: false }
+      - type: bind
+        source: ${CAMPUSCLAW_DOCKER_ROOT:-/run/desktop/mnt/host/campusclaw-course}/runtime/private/mysql_root_password
+        target: /run/secrets/mysql_root_password
+        read_only: true
+        bind: { create_host_path: false }
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "--silent"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 60s
+    stop_grace_period: 60s
+    networks: [backend]
+
+  db-check:
+    profiles: [checks]
+    image: mysql:8.4@sha256:76f0358884cb92d9a086d24e5671c38048d3fef40f2588703d73eb55392d6b69
+    entrypoint: ["/bin/sh", "/check/container-db-check.sh"]
+    environment:
+      APP_ORIGIN: http://127.0.0.1:8080
+      WEB_PORT: "8080"
+      MYSQL_HOST: db
+      MYSQL_PORT: "3306"
+      MYSQL_DATABASE: campusclaw_course
+      MYSQL_USER: campusclaw
+      QDRANT_URL: http://qdrant:6333
+    volumes:
+      - type: bind
+        source: ${CAMPUSCLAW_DOCKER_ROOT:-/run/desktop/mnt/host/campusclaw-course}/backend/bin
+        target: /check/bin
+        read_only: true
+        bind: { create_host_path: false }
+      - type: bind
+        source: ${CAMPUSCLAW_DOCKER_ROOT:-/run/desktop/mnt/host/campusclaw-course}/scripts/container-db-check.sh
+        target: /check/container-db-check.sh
+        read_only: true
+        bind: { create_host_path: false }
+      - type: bind
+        source: ${CAMPUSCLAW_DOCKER_ROOT:-/run/desktop/mnt/host/campusclaw-course}/runtime/uploads
+        target: /data/uploads
+        bind: { create_host_path: false }
+      - type: bind
+        source: ${CAMPUSCLAW_DOCKER_ROOT:-/run/desktop/mnt/host/campusclaw-course}/runtime/private/mysql_password
+        target: /run/secrets/mysql_password
+        read_only: true
+        bind: { create_host_path: false }
+      - type: bind
+        source: ${CAMPUSCLAW_DOCKER_ROOT:-/run/desktop/mnt/host/campusclaw-course}/runtime/private/session_secret
+        target: /run/secrets/session_secret
+        read_only: true
+        bind: { create_host_path: false }
+    read_only: true
+    tmpfs: ["/tmp:size=16m,noexec,nosuid"]
+    security_opt: [no-new-privileges:true]
+    networks: [backend]
+
+  api:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    environment:
+      APP_ORIGIN: http://127.0.0.1:8080
+      WEB_PORT: "8080"
+      API_PORT: "8080"
+      API_LISTEN_HOST: 0.0.0.0
+      MYSQL_HOST: db
+      MYSQL_PORT: "3306"
+      MYSQL_DATABASE: campusclaw_course
+      MYSQL_USER: campusclaw
+      MYSQL_PASSWORD_FILE: /run/secrets/mysql_password
+      QDRANT_URL: http://qdrant:6333
+      EMBEDDING_BASE_URL: ${EMBEDDING_BASE_URL:-}
+      EMBEDDING_API_KEY: ${EMBEDDING_API_KEY:-}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-}
+      EMBEDDING_DIM: ${EMBEDDING_DIM:-}
+      CHAT_BASE_URL: ${CHAT_BASE_URL:-}
+      CHAT_API_KEY: ${CHAT_API_KEY:-${EMBEDDING_API_KEY:-}}
+      CHAT_MODEL: ${CHAT_MODEL:-}
+      SESSION_SECRET_FILE: /run/secrets/session_secret
+      MCP_PRESET_TOKEN_FILE: /run/secrets/mcp_tools_token
+      SEED_TEACHER_A_PASSWORD_FILE: /run/seeds/SEED_TEACHER_A_PASSWORD
+      SEED_STUDENT_A_PASSWORD_FILE: /run/seeds/SEED_STUDENT_A_PASSWORD
+      SEED_TEACHER_B_PASSWORD_FILE: /run/seeds/SEED_TEACHER_B_PASSWORD
+      SEED_STUDENT_B_PASSWORD_FILE: /run/seeds/SEED_STUDENT_B_PASSWORD
+      UPLOAD_ROOT: /data/uploads
+      MATERIAL_SEED_ROOT: /run/material-seeds
+    volumes:
+      - type: bind
+        source: ${CAMPUSCLAW_DOCKER_ROOT:-/run/desktop/mnt/host/campusclaw-course}/runtime/uploads
+        target: /data/uploads
+        bind: { create_host_path: false }
+      - type: bind
+        source: ${CAMPUSCLAW_DOCKER_ROOT:-/run/desktop/mnt/host/campusclaw-course}/runtime/private/mysql_password
+        target: /run/secrets/mysql_password
+        read_only: true
+        bind: { create_host_path: false }
+      - type: bind
+        source: ${CAMPUSCLAW_DOCKER_ROOT:-/run/desktop/mnt/host/campusclaw-course}/runtime/private/session_secret
+        target: /run/secrets/session_secret
+        read_only: true
+        bind: { create_host_path: false }
+      - type: bind
+        source: ${CAMPUSCLAW_DOCKER_ROOT:-/run/desktop/mnt/host/campusclaw-course}/runtime/private/mcp_tools_token
+        target: /run/secrets/mcp_tools_token
+        read_only: true
+        bind: { create_host_path: false }
+      - type: bind
+        source: ${CAMPUSCLAW_DOCKER_ROOT:-/run/desktop/mnt/host/campusclaw-course}/runtime/private/seed
+        target: /run/seeds
+        read_only: true
+        bind: { create_host_path: false }
+      - type: bind
+        source: ${CAMPUSCLAW_DOCKER_ROOT:-/run/desktop/mnt/host/campusclaw-course}/docs/lesson-03/materials
+        target: /run/material-seeds
+        read_only: true
+        bind: { create_host_path: false }
+    read_only: true
+    tmpfs: ["/tmp:size=8m,noexec,nosuid"]
+    security_opt: [no-new-privileges:true]
+    depends_on:
+      db:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
+      mcp-tools:
+        condition: service_started
+    networks: [backend, edge]
+
+  web:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    ports:
+      - "127.0.0.1:8080:8080"
+    depends_on:
+      api:
+        condition: service_started
+    read_only: true
+    tmpfs: ["/var/cache/nginx:size=8m,noexec,nosuid,uid=101,gid=101,mode=0750", "/var/run:size=1m,noexec,nosuid,uid=101,gid=101,mode=0750", "/tmp:size=4m,noexec,nosuid,uid=101,gid=101,mode=1777"]
+    security_opt: [no-new-privileges:true]
+    networks: [backend, edge]
+
+networks:
+  backend:
+    internal: true
+  edge:
+    driver: bridge
