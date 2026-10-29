@@ -14,3 +14,11 @@ The service SHALL create a conversation in an explicit transaction. If a stateme
 #### Scenario: Commit acknowledgement fails
 - **WHEN** the caller cannot confirm commit success
 - **THEN** the page refreshes the owned list and preserves the uncertain result instead of claiming no row was saved
+
+### Requirement: Isolated probe cleanup
+Database integration probes SHALL clean only their own unique temporary tables, including when creation reports an error.
+
+#### Scenario: Probe statement connection is no longer usable
+- **WHEN** a probe statement connection is closed or times out
+- **THEN** cleanup uses an independent database connection and context to drop the test-owned table
+- **AND** reports success only after cleanup finishes
