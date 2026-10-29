@@ -454,14 +454,19 @@ func (s *Lesson5Store) ListConversations(ctx context.Context, u repositories.Use
 }
 
 func (s *Lesson5Store) CreateConversation(ctx context.Context, u repositories.User, agentID int64) (int64, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, ErrLesson5Unavailable
+	}
+	defer tx.Rollback()
 	var count int
-	if s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM course_agents WHERE class_id=? AND enabled=1`, u.ClassID).Scan(&count) != nil {
+	if tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM course_agents WHERE class_id=? AND enabled=1`, u.ClassID).Scan(&count) != nil {
 		return 0, ErrLesson5Unavailable
 	}
 	if count == 0 {
 		return 0, ErrNoEnabledAgent
 	}
-	res, err := s.db.ExecContext(ctx, `INSERT INTO conversations(class_id,user_id,agent_id,title) SELECT ?,?,?, '新的提问' FROM course_agents WHERE id=? AND class_id=? AND enabled=1`, u.ClassID, u.ID, agentID, agentID, u.ClassID)
+	res, err := tx.ExecContext(ctx, `INSERT INTO conversations(class_id,user_id,agent_id,title) SELECT ?,?,?, '新的提问' FROM course_agents WHERE id=? AND class_id=? AND enabled=1`, u.ClassID, u.ID, agentID, agentID, u.ClassID)
 	if err != nil {
 		return 0, ErrLesson5Unavailable
 	}
@@ -474,6 +479,9 @@ func (s *Lesson5Store) CreateConversation(ctx context.Context, u repositories.Us
 	}
 	if id == 0 {
 		return 0, ErrLesson5NotFound
+	}
+	if err = tx.Commit(); err != nil {
+		return 0, ErrLesson5Unavailable
 	}
 	return id, nil
 }

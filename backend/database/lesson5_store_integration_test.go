@@ -132,6 +132,32 @@ func TestLesson5ConversationOwnershipAndContextIntegration(t *testing.T) {
 			t.Fatal("context message exceeded the 500-character limit")
 		}
 	}
+
+	// Hold only the synthetic agent row. The production driver has a 3s read timeout.
+	lockTx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer lockTx.Rollback()
+	var lockedID int64
+	if err = lockTx.QueryRowContext(ctx, `SELECT id FROM course_agents WHERE id=? FOR UPDATE`, agentA).Scan(&lockedID); err != nil {
+		t.Fatal(err)
+	}
+	_, createErr := store.CreateConversation(ctx, owner, agentA)
+	if err = lockTx.Rollback(); err != nil {
+		t.Fatal(err)
+	}
+	if !errors.Is(createErr, services.ErrLesson5Unavailable) {
+		t.Fatalf("expected delayed creation to time out: %v", createErr)
+	}
+	// Give the server time to resume its blocked statement after releasing the lock.
+	time.Sleep(500 * time.Millisecond)
+	items, err = store.ListConversations(ctx, owner)
+	if err != nil || len(items) != 1 || items[0].ID != cid {
+		t.Fatalf("timed-out creation left a late row: conversations=%d err=%v", len(items), err)
+	}
+	t.Log("CHECK: lock-delayed insert timed out without persisting a late conversation")
+
 	t.Log("CHECK: owner isolation, same-class/cross-class denial, agent lock, 24-character title, and six-by-500 context passed")
 }
 
