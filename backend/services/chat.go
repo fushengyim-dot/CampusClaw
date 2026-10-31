@@ -43,8 +43,8 @@ func NewChatClient(cfg ChatConfig) (*ChatClient, error) {
 	if err != nil || u == nil || u.Scheme != "https" || u.Hostname() != "ai-gateway.devops.hello1023.com" || u.Port() != "" || u.User != nil || u.Path != "/v1" || u.RawQuery != "" || u.Fragment != "" || cfg.APIKey == "" || cfg.APIKey != strings.TrimSpace(cfg.APIKey) || strings.ContainsAny(cfg.APIKey, "\r\n") || strings.TrimSpace(cfg.Model) == "" {
 		return nil, ErrChatUnavailable
 	}
-	client := &http.Client{Timeout: 30 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
-	return &ChatClient{endpoint: strings.TrimRight(baseURL, "/") + "/chat/completions", apiKey: cfg.APIKey, model: strings.TrimSpace(cfg.Model), http: client, streamHTTP: &http.Client{Timeout: 120 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}}, nil
+	client := &http.Client{Transport: captureTransport(), Timeout: 30 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	return &ChatClient{endpoint: strings.TrimRight(baseURL, "/") + "/chat/completions", apiKey: cfg.APIKey, model: strings.TrimSpace(cfg.Model), http: client, streamHTTP: &http.Client{Transport: captureTransport(), Timeout: 120 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}}, nil
 }
 
 func (c *ChatClient) Complete(ctx context.Context, messages []ChatMessage) (string, error) {

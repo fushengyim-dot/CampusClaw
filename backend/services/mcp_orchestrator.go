@@ -179,8 +179,16 @@ func (o *MCPOrchestrator) Run(ctx context.Context, user repositories.User, conve
 			if onTool != nil {
 				onTool(MCPToolEvent{Name: item.Tool.Name, Status: "running"})
 			}
+			captureDir, captureErr := CaptureToolStart(phaseCtx, item.Tool.Name, args)
+			if captureErr != nil {
+				return "", captureErr
+			}
 			callCtx, stop := context.WithTimeout(phaseCtx, MCPToolTimeout)
 			result, callErr := o.Registry.CallTool(callCtx, item, args)
+			if captureErr := CaptureToolEnd(phaseCtx, captureDir, result, callErr); captureErr != nil {
+				stop()
+				return "", captureErr
+			}
 			callContextErr := callCtx.Err()
 			stop()
 			status := "success"

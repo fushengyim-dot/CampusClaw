@@ -336,6 +336,12 @@ func streamConversationWithMCP(w http.ResponseWriter, r *http.Request, s lesson5
 		lesson5Error(w, err)
 		return
 	}
+	captureCtx, captureErr := services.CaptureConversation(r.Context(), u.ID, u.ClassID, cid, u.Role, agent, in.Content, in.PromptTemplate, materials, selected, history)
+	if captureErr != nil {
+		writeError(w, 503, "CAPTURE_UNAVAILABLE", captureErr.Error())
+		return
+	}
+	r = r.WithContext(captureCtx)
 	var citations []services.KnowledgeHit
 	if len(materials) > 0 {
 		scoped, ok := search.(lesson5Search)
@@ -373,6 +379,10 @@ func streamConversationWithMCP(w http.ResponseWriter, r *http.Request, s lesson5
 		}
 	}
 	citations = filtered
+	if captureErr := services.CaptureCitations(r.Context(), citations); captureErr != nil {
+		writeError(w, 503, "CAPTURE_UNAVAILABLE", captureErr.Error())
+		return
+	}
 	if citations == nil {
 		citations = []services.KnowledgeHit{}
 	}
